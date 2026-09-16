@@ -34,6 +34,13 @@ static void riscv_intc_irq(struct pt_regs *regs)
 		pr_warn_ratelimited("Failed to handle interrupt (cause: %ld)\n", cause);
 }
 
+void axvisor_linux_handle_pending_software_irq(void)
+{
+	if (generic_handle_domain_irq(intc_domain, RV_IRQ_SOFT))
+		pr_warn_ratelimited(
+			"Failed to handle AxVisor software interrupt\n");
+}
+
 static void riscv_intc_aia_irq(struct pt_regs *regs)
 {
 	unsigned long topi;

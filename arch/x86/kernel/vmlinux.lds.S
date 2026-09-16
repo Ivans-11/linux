@@ -148,6 +148,8 @@ SECTIONS
 #endif
 		ALIGN_ENTRY_TEXT_END
 		*(.gnu.warning)
+		/* Rust compiler_builtins and AxVisor code use many .text.* sections. */
+		*(.text.*)
 
 	} :text = 0xcccccccc
 
@@ -181,6 +183,13 @@ SECTIONS
 
 		DATA_DATA
 		CONSTRUCTORS
+		*(.data.axvisor* .data._R* .data.__AxVisorApi*)
+		/* Keep the Rust per-CPU template and its bounds visible to ax-percpu. */
+		_percpu_start = .;
+		_percpu_load_start = .;
+		*(.percpu .percpu.*)
+		_percpu_load_end = .;
+		_percpu_end = .;
 
 		/* rarely changed data like cpu maps */
 		READ_MOSTLY_DATA(INTERNODE_CACHE_BYTES)
@@ -393,6 +402,7 @@ SECTIONS
 		. = ALIGN(PAGE_SIZE);
 		*(BSS_MAIN)
 		BSS_DECRYPTED
+		*(.bss.axvisor* .bss._R* .bss.__AxVisorApi*)
 		. = ALIGN(PAGE_SIZE);
 		__bss_stop = .;
 	}

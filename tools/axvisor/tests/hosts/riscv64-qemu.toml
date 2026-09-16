@@ -1,0 +1,18 @@
+arch = "riscv64"
+qemu_binary = "qemu-system-riscv64"
+
+# These are the outer host-QEMU arguments. Guest and benchmark parameters belong
+# to the selected case manifest, not this host profile.
+qemu_args = [
+  "-machine", "virt",
+  "-cpu", "rv64,h=true,svpbmt=true,sstc=true",
+  "-smp", "2",
+  "-m", "8G",
+  "-nographic",
+  "-no-reboot",
+  "-bios", "default",
+  "-display", "none",
+  "-serial", "chardev:mux",
+  "-monitor", "chardev:mux",
+  "-chardev", "stdio,id=mux,mux=on,signal=off",
+]

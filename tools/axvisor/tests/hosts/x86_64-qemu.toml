@@ -1,0 +1,16 @@
+arch = "x86_64"
+qemu_binary = "qemu-system-x86_64"
+
+# The final x86 host profile will be fixed together with the server runbook.
+# Keep host parameters separate from guest/Firecracker benchmark parameters.
+qemu_args = [
+  "-machine", "q35,kernel-irqchip=split",
+  "-enable-kvm",
+  "-cpu", "host",
+  "-smp", "2",
+  "-m", "2G",
+  "-nographic",
+  "-serial", "stdio",
+  "-monitor", "none",
+  "-no-reboot",
+]

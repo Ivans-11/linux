@@ -1,0 +1,15 @@
+[workspace]
+resolver = "3"
+members = [
+    "axvisor-linux-host",
+    "axvisor-linux-core",
+]
+
+[workspace.package]
+edition = "2024"
+license = "Apache-2.0"
+
+[profile.release]
+panic = "abort"
+lto = false
+codegen-units = 1

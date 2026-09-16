@@ -1,0 +1,59 @@
+# Reproducible assets used by test cases.  Cases refer to labels from this
+# catalog; the runner resolves, verifies and caches each artifact under
+# .work/assets.  Binaries are never committed to the repository.
+
+# Guest images are assets too. `archive = true` tells the runner to unpack
+# the verified archive into the guest-image cache before staging it.
+[assets.qemu-riscv64-linux]
+kind = "download"
+arch = "riscv64"
+url = "https://github.com/arceos-hypervisor/axvisor-guest/releases/download/v0.0.25/qemu_riscv64_linux.tar.gz"
+sha256 = "263ace33027e529911bf468968c9887e1267ba018d4559dcd7c6f6817246e72e"
+archive = true
+
+[assets.qemu-x86_64-linux]
+kind = "download"
+arch = "x86_64"
+url = "https://github.com/arceos-hypervisor/axvisor-guest/releases/download/v0.0.25/qemu_x86_64_linux.tar.gz"
+sha256 = "fcbbb07f3624c370df4b703d3d2862e56ad022b84558074ec6e2282844486d4e"
+archive = true
+
+# The RISC-V host initramfs is built by a pinned Nix expression. It contains
+# BusyBox, lkvm, and the complete dynamic-loader/runtime closure required by
+# lkvm. Keeping it as one tree avoids a runner-specific list of libraries.
+[assets.host-initramfs-riscv64]
+kind = "nix"
+arch = "riscv64"
+expression = "tests/assets/nix/default.nix"
+attribute = "hostInitramfs"
+target = "."
+
+[assets.host-initramfs-x86_64]
+kind = "nix"
+arch = "x86_64"
+expression = "tests/assets/nix/default.nix"
+attribute = "hostInitramfsX86_64"
+target = "."
+
+[assets.gvisor-net-test-x86_64]
+kind = "nix"
+arch = "x86_64"
+expression = "tests/assets/nix/default.nix"
+attribute = "gvisorNetTestX86_64"
+target = "test"
+
+[assets.firecracker-riscv64]
+kind = "download"
+arch = "riscv64"
+url = "https://github.com/Ivans-11/firecracker/releases/download/firecracker-riscv64-v0.1.1/firecracker-riscv64gc-unknown-linux-musl"
+sha256 = "8fdfc96d24fce2d6e20828324d9925e435203dac04a34ed257957d8d7e9079aa"
+target = "test/firecracker"
+
+# Firecracker and gVisor entries can be added here without changing the
+# runner.  A downloaded artifact uses the same label/target/staging path.
+[assets.firecracker-vmlinux-x86_64]
+kind = "download"
+arch = "x86_64"
+url = "https://s3.amazonaws.com/spec.ccfc.min/firecracker-ci/v1.12/x86_64/vmlinux-5.10.233"
+sha256 = "3a30d91f3bf475e3950b9825d047c6839bc64249f383f6173912fe8afe89b5c3"
+target = "firecracker-vmlinux"

@@ -19,6 +19,9 @@
 #include <linux/platform_device.h>
 #include <linux/spinlock.h>
 #include <linux/syscore_ops.h>
+
+extern bool axvisor_linux_handle_irq(unsigned long vector);
+void axvisor_linux_handle_pending_external_irqs(void);
 #include <asm/smp.h>
 
 /*
@@ -372,25 +375,33 @@ static const struct irq_domain_ops plic_irqdomain_ops = {
  * that source ID back to the same claim register.  This automatically enables
  * and disables the interrupt, so there's nothing else to do.
  */
-static void plic_handle_irq(struct irq_desc *desc)
+void axvisor_linux_handle_pending_external_irqs(void)
 {
 	struct plic_handler *handler = this_cpu_ptr(&plic_handlers);
-	struct irq_chip *chip = irq_desc_get_chip(desc);
 	void __iomem *claim = handler->hart_base + CONTEXT_CLAIM;
 	irq_hw_number_t hwirq;
 
-	WARN_ON_ONCE(!handler->present);
+	if (!handler->present)
+		return;
+
+	while ((hwirq = readl(claim))) {
+		if (!axvisor_linux_handle_irq(hwirq)) {
+			int err = generic_handle_domain_irq(handler->priv->irqdomain,
+							    hwirq);
+			if (unlikely(err))
+				pr_warn_ratelimited("%pfwP: can't find mapping for hwirq %lu\n",
+						    handler->priv->fwnode, hwirq);
+		}
+	}
+}
+
+static void plic_handle_irq(struct irq_desc *desc)
+{
+	struct irq_chip *chip = irq_desc_get_chip(desc);
 
 	chained_irq_enter(chip, desc);
 
-	while ((hwirq = readl(claim))) {
-		int err = generic_handle_domain_irq(handler->priv->irqdomain,
-						    hwirq);
-		if (unlikely(err)) {
-			pr_warn_ratelimited("%pfwP: can't find mapping for hwirq %lu\n",
-					    handler->priv->fwnode, hwirq);
-		}
-	}
+	axvisor_linux_handle_pending_external_irqs();
 
 	chained_irq_exit(chip, desc);
 }

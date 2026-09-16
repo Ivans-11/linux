@@ -1,0 +1,22 @@
+arch = "x86_64"
+mode = "control"
+case = "x86_64-control-gvisor-kvm"
+host_profile = "x86_64-qemu"
+status = "active"
+
+test_files = []
+payload_files = []
+payload_assets = []
+initramfs_init = "tests/programs/host_shell_init.sh"
+host_initramfs_assets = ["host-initramfs-x86_64", "gvisor-net-test-x86_64"]
+timeout_secs = 600
+success_regex = ["(?m)^gvisor kvm loopback network test pass!\\s*$"]
+fail_regex = [
+  "(?i)uncaught panic", "(?i)panicked at", "(?i)runsc.*failed",
+  "(?i)error initializing kvm", "(?i)creating vm:", "(?m)^panic:",
+  "(?i)failed to set filter", "(?i)creating container:",
+  "(?i)flag provided but not defined:", "(?i)fatal error:",
+  "(?i)segmentation fault", "(?i)unexpected internal_error exit",
+]
+shell_prompt = "~ # "
+shell_init_cmd = "mkdir -p /tmp/runsc-root; /test/runsc --root=/tmp/runsc-root --platform=kvm --network=none --ignore-cgroups --directfs=false --TESTONLY-unsafe-nonroot --log=/dev/console --panic-log=/dev/console do --force-overlay=false /test/gvisor_net_test"

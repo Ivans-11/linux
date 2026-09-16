@@ -1,0 +1,18 @@
+[package]
+name = "axvisor-linux-host"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+
+[lib]
+crate-type = ["rlib"]
+
+[features]
+default = []
+control = ["axvisor_api/control"]
+shell = ["axvisor_api/shell"]
+
+[dependencies]
+axvisor_api = { git = "https://github.com/Ivans-11/tgoskits", branch = "axvisor-core", default-features = false }
+ax-errno = { git = "https://github.com/Ivans-11/tgoskits", branch = "axvisor-core" }
+spin = "0.12"

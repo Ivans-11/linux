@@ -1,0 +1,36 @@
+arch = "riscv64"
+mode = "control"
+case = "riscv64-control-firecracker-linux"
+host_profile = "riscv64-qemu"
+status = "active"
+host_cmdline = "console=ttyS0 earlycon=sbi panic=-1 init=/init"
+
+guest_image = "qemu-riscv64-linux"
+payload_files = ["qemu-riscv64", "initramfs.cpio.gz", "rootfs.img", "firecracker-riscv.json"]
+payload_assets = []
+initramfs_init = "tests/programs/host_shell_init.sh"
+host_initramfs_assets = ["host-initramfs-riscv64", "firecracker-riscv64"]
+test_files = []
+timeout_secs = 600
+success_regex = ["(?m)^firecracker guest test pass!\\s*$"]
+fail_regex = [
+  "(?i)kernel panic", "(?i)panicked at", "(?i)login incorrect",
+  "(?i)permission denied", "(?i)Fatal: Unable to", "(?i)Unable to open kernel",
+  "(?i)Firecracker exiting with error",
+  "(?i)RunWithApiError", "(?i)StartMicrovm", "(?i)KVM_.*failed",
+]
+shell_prompt = "~ # "
+extra_qemu_args = [
+  "-drive",
+  "if=none,format=raw,id=firecracker_linux_payload,file={control_payload_image}",
+  "-device",
+  "virtio-blk-device,drive=firecracker_linux_payload",
+]
+
+[[interactions]]
+expect = "~ # "
+send = "umount /ext2 2>/dev/null; mount -t ext2 /dev/vda /ext2 && /test/firecracker --no-api --no-seccomp --config-file /ext2/firecracker-riscv.json --level Debug"
+
+[[interactions]]
+expect = "~ # "
+send = "/bin/busybox mount -t proc proc /proc 2>/dev/null || true; n=$(/bin/busybox grep -c '^processor' /proc/cpuinfo); test \"$n\" -ge 4 && echo 'firecracker guest test pass!'"

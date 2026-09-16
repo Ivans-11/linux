@@ -1,0 +1,31 @@
+[base]
+id = 1
+name = "linux-qemu"
+vm_type = 1
+cpu_num = 4
+phys_cpu_ids = [0, 1, 2, 3]
+phys_cpu_sets = [1, 2, 1, 2]
+
+[kernel]
+entry_point = 0x9020_0000
+image_location = "memory"
+kernel_path = "{guest_dir}/qemu-riscv64"
+kernel_load_addr = 0x9020_0000
+dtb_load_addr = 0x9300_0000
+cmdline = "earlycon=sbi console=ttyS0,115200 init=/bin/sh root=/dev/vda rw"
+memory_regions = [[0x9000_0000, 0x0400_0000, 0x7, 1]]
+
+[devices]
+interrupt_mode = "passthrough"
+passthrough_devices = [
+  ["/soc/serial@10000000"],
+  ["/soc/virtio_mmio@10008000"],
+  ["/soc/virtio_mmio@10007000"],
+]
+passthrough_addresses = [
+  [0x1000_0000, 0x100],
+  [0x1000_8000, 0x1000],
+  [0x1000_7000, 0x1000],
+]
+excluded_devices = []
+emu_devices = [["plic", 0x0c00_0000, 0x60_0000, 0, 0x30, [8]]]

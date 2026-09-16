@@ -272,6 +272,66 @@ static __always_inline int call_irq_handler(int vector, struct pt_regs *regs)
 }
 
 /*
+ * VMX external-interrupt exits arrive before Linux enters common_interrupt().
+ * Let the AxVisor Linux adapter dispatch a vector through the normal Linux
+ * IRQ descriptor when the host owns it.
+ */
+extern bool axvisor_linux_dispatch_host_irq(unsigned long vector);
+bool axvisor_linux_dispatch_host_irq(unsigned long vector)
+{
+	struct irq_desc *desc;
+	unsigned long flags;
+
+	if (vector >= NR_VECTORS)
+		return false;
+	desc = __this_cpu_read(vector_irq[vector]);
+	if (IS_ERR_OR_NULL(desc))
+		return false;
+	local_irq_save(flags);
+	handle_irq(desc, NULL);
+	local_irq_restore(flags);
+	return true;
+}
+
+/*
+ * VMX exits happen before Linux's IDT entry code creates pt_regs.  Re-enter
+ * the normal system-vector handlers with a synthetic kernel-mode frame so
+ * host timer/IPI accounting and scheduling continue while a guest runs.
+ */
+bool axvisor_linux_dispatch_host_system_irq(unsigned long vector)
+{
+	struct pt_regs regs = { 0 };
+	unsigned long flags;
+
+	local_irq_save(flags);
+	regs.flags = flags;
+
+	switch (vector) {
+	case LOCAL_TIMER_VECTOR:
+		sysvec_apic_timer_interrupt(&regs);
+		break;
+	case RESCHEDULE_VECTOR:
+		sysvec_reschedule_ipi(&regs);
+		break;
+	case CALL_FUNCTION_VECTOR:
+		sysvec_call_function(&regs);
+		break;
+	case CALL_FUNCTION_SINGLE_VECTOR:
+		sysvec_call_function_single(&regs);
+		break;
+	case IRQ_WORK_VECTOR:
+		sysvec_irq_work(&regs);
+		break;
+	default:
+		local_irq_restore(flags);
+		return false;
+	}
+	local_irq_restore(flags);
+	return true;
+}
+
+
+/*
  * common_interrupt() handles all normal device IRQ's (the special SMP
  * cross-CPU interrupts have their own entry points).
  */

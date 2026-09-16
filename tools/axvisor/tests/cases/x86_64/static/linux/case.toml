@@ -1,0 +1,26 @@
+arch = "x86_64"
+mode = "static"
+case = "x86_64-static-linux"
+host_profile = "x86_64-qemu"
+status = "active"
+
+guest = "linux"
+guest_image = "qemu-x86_64-linux"
+vm_config = "vm.toml"
+payload_files = ["qemu-x86_64", "rootfs.img"]
+payload_assets = []
+test_files = []
+timeout_secs = 600
+success_regex = ["(?m)^guest linux test pass!\\s*$"]
+fail_regex = [
+  "(?i)kernel panic", "(?i)panicked at", "(?i)login incorrect",
+  "(?i)permission denied",
+]
+shell_prompt = "~ #"
+shell_init_cmd = "/bin/busybox mount -t proc proc /proc 2>/dev/null || true; n=$(/bin/busybox grep -c '^processor' /proc/cpuinfo); /bin/busybox ip link set eth0 up && /bin/busybox ip addr add 10.0.2.15/24 dev eth0 && /bin/busybox ping -c 3 -W 3 10.0.2.2 && test \"$n\" -ge 4 && echo 'guest linux test pass!'"
+extra_qemu_args = [
+  "-device", "virtio-blk-pci,drive=disk0,addr=03.0,disable-modern=on",
+  "-drive", "id=disk0,if=none,format=raw,file={guest_dir}/rootfs.img",
+  "-netdev", "user,id=axvisor_guest_net",
+  "-device", "virtio-net-pci,netdev=axvisor_guest_net,addr=04.0,disable-modern=on,romfile=,mac=06:00:ac:10:00:02",
+]

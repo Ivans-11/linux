@@ -1,0 +1,14 @@
+config AXVISOR_LINUX_BRIDGE
+	bool "AxVisor Linux host bridge"
+	default n
+	help
+	  Build the Linux host provider and link the no_std AxVisor Rust domain
+	  into the kernel.
+
+config AXVISOR_LINUX_CONTROL
+	bool "AxVisor Linux control endpoint"
+	depends on AXVISOR_LINUX_BRIDGE
+	select MISC_DEVICES
+	default n
+	help
+	  Publish AxVisor's KVM-compatible control endpoint as /dev/kvm.

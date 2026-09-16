@@ -1,0 +1,5 @@
+[toolchain]
+channel = "nightly-2026-05-28"
+profile = "minimal"
+components = ["rust-src", "llvm-tools"]
+targets = ["riscv64gc-unknown-none-elf", "x86_64-unknown-none"]
