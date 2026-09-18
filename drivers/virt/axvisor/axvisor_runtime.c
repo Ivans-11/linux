@@ -49,7 +49,7 @@ static irqreturn_t axvisor_linux_passthrough_irq(int irq, void *dev_id)
 {
 	unsigned long vector = *(unsigned long *)dev_id;
 	(void)irq;
-	axvisor_linux_handle_irq(vector);
+	axvisor_linux_handle_registered_irq(vector);
 	return IRQ_HANDLED;
 }
 

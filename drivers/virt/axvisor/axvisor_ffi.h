@@ -71,6 +71,7 @@ unsigned long axvisor_linux_spawn_task(int (*entry)(void *), void *data,
 void axvisor_linux_join_task(unsigned long handle);
 unsigned long axvisor_linux_current_task(void);
 bool axvisor_linux_handle_irq(unsigned long vector);
+bool axvisor_linux_handle_registered_irq(unsigned long vector);
 bool axvisor_linux_prepare_irq_vector(unsigned long vector);
 #ifdef CONFIG_X86
 bool axvisor_linux_dispatch_host_irq(unsigned long vector);

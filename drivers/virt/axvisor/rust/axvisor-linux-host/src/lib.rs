@@ -310,21 +310,17 @@ impl IrqIf for LinuxHost {
             unsafe { axvisor_linux_irq_local_restore(flags) };
             return true;
         }
-        let flags = unsafe { axvisor_linux_irq_local_save() };
-        let handler = IRQ_HANDLERS.lock().get(&vector).copied();
-        unsafe { axvisor_linux_irq_local_restore(flags) };
-        if let Some(handler) = handler {
-            handler(vector);
-            true
-        } else {
-            #[cfg(target_arch = "x86_64")]
-            // A VMX external-interrupt exit occurs before Linux's IDT entry;
-            // dispatch vectors owned by the Linux host explicitly.
-            if unsafe { axvisor_linux_dispatch_host_system_irq(vector) || axvisor_linux_dispatch_host_irq(vector) } {
-                return true;
-            }
-            false
+        #[cfg(target_arch = "x86_64")]
+        // A VMX external-interrupt exit carries a host APIC vector.  Dispatch
+        // it through Linux before consulting AxVisor's guest-vector registry;
+        // the two vector spaces overlap numerically.
+        if unsafe {
+            axvisor_linux_dispatch_host_system_irq(vector)
+                || axvisor_linux_dispatch_host_irq(vector)
+        } {
+            return true;
         }
+        handle_registered_irq(vector)
     }
     fn register_irq_handler(vector: usize, handler: IrqHandler) -> bool {
         #[cfg(target_arch = "x86_64")]
@@ -345,6 +341,25 @@ impl IrqIf for LinuxHost {
         unsafe { axvisor_linux_irq_local_restore(flags) };
         true
     }
+}
+
+fn handle_registered_irq(vector: usize) -> bool {
+    let flags = unsafe { axvisor_linux_irq_local_save() };
+    let handler = IRQ_HANDLERS.lock().get(&vector).copied();
+    unsafe { axvisor_linux_irq_local_restore(flags) };
+    if let Some(handler) = handler {
+        handler(vector);
+        true
+    } else {
+        false
+    }
+}
+
+/// Dispatch a vector already translated from a Linux IRQ descriptor into the
+/// guest-vector namespace.
+#[unsafe(no_mangle)]
+pub extern "C" fn axvisor_linux_handle_registered_irq(vector: usize) -> bool {
+    handle_registered_irq(vector)
 }
 
 #[api_impl]
