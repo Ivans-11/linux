@@ -1,0 +1,14 @@
+arch = "riscv64"
+mode = "conformance"
+case = "riscv64-conformance"
+host_profile = "riscv64-qemu"
+host_cmdline = "console=ttyS0 earlycon=sbi panic=-1 init=/init"
+initramfs_init = "tests/programs/host_shell_init.sh"
+host_initramfs_assets = ["host-initramfs-riscv64"]
+timeout_secs = 120
+success_regex = ["CONFORMANCE summary=PASS complete=true"]
+fail_regex = [
+  "CONFORMANCE .*status=FAIL",
+  "CONFORMANCE summary=FAIL",
+  "Kernel panic",
+]

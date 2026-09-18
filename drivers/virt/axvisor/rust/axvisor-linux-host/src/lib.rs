@@ -328,7 +328,9 @@ impl IrqIf for LinuxHost {
     }
     fn register_irq_handler(vector: usize, handler: IrqHandler) -> bool {
         #[cfg(target_arch = "x86_64")]
-        if !unsafe { axvisor_linux_prepare_irq_vector(vector) } {
+        if (vector == 0x2a || vector == 0x2b)
+            && !unsafe { axvisor_linux_prepare_irq_vector(vector) }
+        {
             return false;
         }
         let flags = unsafe { axvisor_linux_irq_local_save() };

@@ -5,6 +5,11 @@
 #include <linux/types.h>
 
 void axvisor_linux_core_boot(void) __noreturn;
+#ifdef CONFIG_AXVISOR_LINUX_CONFORMANCE
+bool axvisor_linux_conformance_enabled(void);
+int axvisor_linux_conformance_run(void);
+bool axvisor_linux_conformance_trigger_irq(unsigned long vector);
+#endif
 
 void axvisor_linux_log_message(const u8 *message, size_t length);
 

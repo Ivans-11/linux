@@ -108,6 +108,9 @@ pub extern "C" fn axvisor_linux_core_boot() -> ! {
     }
 }
 
+#[cfg(feature = "conformance-test")]
+use axvisor_linux_conformance as _;
+
 /// Initialize AxVisor's KVM-compatible control endpoint without starting the
 /// static VM configuration. The Linux module selects this mode explicitly via
 /// its `control` boot parameter.

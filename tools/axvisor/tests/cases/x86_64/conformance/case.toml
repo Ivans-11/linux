@@ -1,0 +1,14 @@
+arch = "x86_64"
+mode = "conformance"
+case = "x86_64-conformance"
+host_profile = "x86_64-qemu"
+host_cmdline = "console=ttyS0 earlycon=ttyS0 panic=-1 init=/init"
+initramfs_init = "tests/programs/host_shell_init.sh"
+host_initramfs_assets = ["host-initramfs-x86_64"]
+timeout_secs = 120
+success_regex = ["CONFORMANCE summary=PASS complete=true"]
+fail_regex = [
+  "CONFORMANCE .*status=FAIL",
+  "CONFORMANCE summary=FAIL",
+  "Kernel panic",
+]

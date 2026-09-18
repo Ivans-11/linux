@@ -398,6 +398,8 @@ def select_core_features(case: dict, configured: str) -> list[str]:
     features = [feature.strip() for feature in configured.split(",") if feature.strip()]
     if case["mode"] == "control":
         add_feature(features, "control")
+    if case["mode"] == "conformance":
+        add_feature(features, "conformance-test")
     if case["arch"] == "riscv64":
         add_feature(features, "sstc")
         return features
@@ -637,6 +639,8 @@ def main() -> int:
         cmdline = case.get("host_cmdline", "console=ttyS0 earlycon=sbi panic=-1 init=/bin/sh")
         if case["mode"] == "control":
             cmdline += " axvisor_linux.control=1"
+        if case["mode"] == "conformance":
+            cmdline += " axvisor_linux.conformance=1"
         command += ["-append", cmdline]
         command += render_args(case.get("extra_qemu_args", []), stage, image_dir, payload_image)
     log_path = WORK / "logs" / f"{case['case']}.log"

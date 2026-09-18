@@ -14,9 +14,11 @@ shell = ["axvisor_api/shell", "axvisor_core/shell"]
 sstc = ["axvisor_core/sstc"]
 svm = ["axvisor_core/svm"]
 vmx = ["axvisor_core/vmx"]
+conformance-test = ["dep:axvisor-linux-conformance"]
 
 [dependencies]
 axvisor_core = { git = "https://github.com/Ivans-11/tgoskits", branch = "axvisor-core", default-features = false }
 axvisor_api = { git = "https://github.com/Ivans-11/tgoskits", branch = "axvisor-core", default-features = false }
+axvisor-linux-conformance = { path = "../axvisor-linux-conformance", optional = true }
 ax-percpu = { git = "https://github.com/Ivans-11/tgoskits", branch = "axvisor-core", features = ["custom-base", "external-base"] }
 log = "0.4"

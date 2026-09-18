@@ -165,6 +165,11 @@ else
 	"$LINUX_DIR/scripts/config" --file "$BUILD_DIR/.config" \
 		-d AXVISOR_LINUX_CONTROL -d VIRTIO_BLK
 fi
+if [[ ",${CORE_FEATURES}," == *,conformance-test,* ]]; then
+	"$LINUX_DIR/scripts/config" --file "$BUILD_DIR/.config" -e AXVISOR_LINUX_CONFORMANCE
+else
+	"$LINUX_DIR/scripts/config" --file "$BUILD_DIR/.config" -d AXVISOR_LINUX_CONFORMANCE
+fi
 
 # Always refresh generated Kconfig files.  This is non-interactive and cheap,
 # while avoiding stale auto.conf state when the cached configuration is reused.

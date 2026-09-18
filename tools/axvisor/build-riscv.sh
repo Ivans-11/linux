@@ -143,6 +143,11 @@ if [[ ",${CORE_FEATURES}," == *,control,* ]]; then
 else
 	"$LINUX_DIR/scripts/config" --file "$BUILD_DIR/.config" -d AXVISOR_LINUX_CONTROL
 fi
+if [[ ",${CORE_FEATURES}," == *,conformance-test,* ]]; then
+	"$LINUX_DIR/scripts/config" --file "$BUILD_DIR/.config" -e AXVISOR_LINUX_CONFORMANCE
+else
+	"$LINUX_DIR/scripts/config" --file "$BUILD_DIR/.config" -d AXVISOR_LINUX_CONFORMANCE
+fi
 make -C "$LINUX_DIR" ARCH=riscv LLVM=1 O="$BUILD_DIR" olddefconfig
 
 # Kbuild does not reliably invalidate these C objects when the AxVisor mode

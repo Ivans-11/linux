@@ -16,6 +16,10 @@ MODULE_PARM_DESC(control,
 static int axvisor_linux_core_thread(void *unused)
 {
 	(void)unused;
+#ifdef CONFIG_AXVISOR_LINUX_CONFORMANCE
+	if (axvisor_linux_conformance_enabled())
+		return axvisor_linux_conformance_run();
+#endif
 #ifdef CONFIG_AXVISOR_LINUX_CONTROL
 	if (axvisor_control_mode) {
 		int ret = axvisor_linux_core_control_boot();

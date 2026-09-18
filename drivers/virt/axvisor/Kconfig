@@ -12,3 +12,10 @@ config AXVISOR_LINUX_CONTROL
 	default n
 	help
 	  Publish AxVisor's KVM-compatible control endpoint as /dev/kvm.
+
+config AXVISOR_LINUX_CONFORMANCE
+	bool "AxVisor host-contract conformance runner"
+	depends on AXVISOR_LINUX_BRIDGE
+	default n
+	help
+	  Build the host-only runner for the shared AxVisor contract tests.
