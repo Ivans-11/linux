@@ -36,10 +36,9 @@ Asset entries use three generic backends: `download` verifies a URL with a
 ./build-assets.py --arch riscv64 --asset host-initramfs-riscv64
 ```
 
-The active manifests cover four RISC-V cases (static Linux, control smoke,
-control lkvm-Linux, and control Firecracker-Linux) and four x86_64 cases
-(static Linux, control smoke, control Firecracker-Linux, and control
-gVisor-KVM).
+The active manifests cover static Linux, conformance, control smoke, and
+userspace VMM paths.  RISC-V exercises Firecracker, kvmtool, and QEMU; x86_64
+exercises Firecracker, QEMU, and the gVisor KVM platform.
 
 The manifests record each case's workload semantics independently of the
 architecture-specific launch backend. The official Firecracker benchmark

@@ -40,8 +40,9 @@ cd "$RUST_DIR"
 # --emit output.  Track the build identity as well, so switching between
 # static/control features cannot reuse an object from the other mode.
 mkdir -p "$RUST_STAMP_DIR"
-HOST_KEY="target=riscv64-linux-kernel;toolchain=$TOOLCHAIN;features=$HOST_FEATURES;flags=panic=abort,opt=2,reloc=static,code=medium"
-CORE_KEY="target=riscv64-linux-kernel;toolchain=$TOOLCHAIN;features=$CORE_FEATURES;flags=panic=abort,opt=2,reloc=static,code=medium,staticlib"
+DEPENDENCY_OPT_LEVEL=${CARGO_PROFILE_DEV_OPT_LEVEL:-default}
+HOST_KEY="target=riscv64-linux-kernel;toolchain=$TOOLCHAIN;cargo_target=$CARGO_TARGET_DIR;dependency_opt=$DEPENDENCY_OPT_LEVEL;features=$HOST_FEATURES;flags=panic=abort,opt=2,reloc=static,code=medium"
+CORE_KEY="target=riscv64-linux-kernel;toolchain=$TOOLCHAIN;cargo_target=$CARGO_TARGET_DIR;dependency_opt=$DEPENDENCY_OPT_LEVEL;features=$CORE_FEATURES;flags=panic=abort,opt=2,reloc=static,code=medium,staticlib"
 FORCE_HOST=0
 FORCE_CORE=0
 if [[ ! -f "$HOST_OBJ" || ! -f "$RUST_STAMP_DIR/host" || "$(cat "$RUST_STAMP_DIR/host")" != "$HOST_KEY" ]]; then

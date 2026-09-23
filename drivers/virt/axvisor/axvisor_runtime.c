@@ -27,6 +27,8 @@
 #include <linux/miscdevice.h>
 #include <linux/uaccess.h>
 #include <linux/workqueue.h>
+#include <linux/pci.h>
+#include <linux/delay.h>
 #ifdef CONFIG_AXVISOR_LINUX_CONTROL
 #include <linux/file.h>
 #include <linux/anon_inodes.h>
@@ -42,45 +44,72 @@
 #include "axvisor_ffi.h"
 
 #ifdef CONFIG_X86
-/* Bind the legacy IOAPIC GSI used by a passthrough PCI device to a Linux
- * descriptor.  The outer QEMU host uses IRQ 20/23, while the guest PCI
- * functions are wired to guest GSI 10/11. */
+struct axvisor_linux_passthrough_irq {
+	unsigned long vector;
+};
+
+static irqreturn_t axvisor_linux_passthrough_irq_thread(int irq, void *dev_id)
+{
+	(void)irq;
+	(void)dev_id;
+	usleep_range(20, 40);
+	return IRQ_HANDLED;
+}
+
+/* Bind the legacy INTx line of a passthrough PCI device to AxVisor's guest
+ * IOAPIC vector. The threaded handler keeps the level-triggered host line
+ * masked briefly while the vCPU services and deasserts it. */
 static irqreturn_t axvisor_linux_passthrough_irq(int irq, void *dev_id)
 {
-	unsigned long vector = *(unsigned long *)dev_id;
+	struct axvisor_linux_passthrough_irq *passthrough = dev_id;
+
 	(void)irq;
-	axvisor_linux_handle_registered_irq(vector);
-	return IRQ_HANDLED;
+	axvisor_linux_handle_registered_irq(passthrough->vector);
+	return IRQ_WAKE_THREAD;
 }
 
 bool axvisor_linux_prepare_irq_vector(unsigned long vector)
 {
-	static unsigned long dev_ids[256];
+	static struct axvisor_linux_passthrough_irq passthrough_irqs[256];
+	static struct pci_dev *devices[256];
+	struct axvisor_linux_passthrough_irq *passthrough;
+	struct pci_dev *pdev;
+	unsigned int devfn;
 	unsigned int irq;
 	int ret;
 
-	/* Map the guest's legacy virtio vectors to the real outer-host IRQ lines.
-	 * The VMX exit vector is the host vector (0x34/0x37); Linux invokes this
-	 * callback on IRQ 20/23 and the callback injects guest vector 0x2a/0x2b. */
+	/* The static x86 platform routes 00:04.0 and 00:03.0 to guest GSIs 10 and
+	 * 11 respectively.  Let Linux resolve their host IRQs from PCI routing. */
 	switch (vector) {
 	case 0x2a:
-		irq = 20;
+		devfn = PCI_DEVFN(4, 0);
 		break;
 	case 0x2b:
-		irq = 23;
+		devfn = PCI_DEVFN(3, 0);
 		break;
 	default:
 		return false;
 	}
-	if (dev_ids[irq] != 0)
+	passthrough = &passthrough_irqs[vector];
+	if (passthrough->vector != 0)
 		return true;
-	dev_ids[irq] = vector;
-	ret = request_irq(irq, axvisor_linux_passthrough_irq,
-			  IRQF_SHARED, "axvisor-ioapic", &dev_ids[irq]);
-	if (ret) {
-		dev_ids[irq] = 0;
+	pdev = pci_get_domain_bus_and_slot(0, 0, devfn);
+	if (!pdev || !pdev->irq) {
+		pci_dev_put(pdev);
 		return false;
 	}
+	irq = pdev->irq;
+	passthrough->vector = vector;
+	ret = request_threaded_irq(irq, axvisor_linux_passthrough_irq,
+			  axvisor_linux_passthrough_irq_thread,
+			  IRQF_SHARED | IRQF_ONESHOT, "axvisor-ioapic",
+			  passthrough);
+	if (ret) {
+		passthrough->vector = 0;
+		pci_dev_put(pdev);
+		return false;
+	}
+	devices[vector] = pdev;
 	return true;
 }
 #endif
@@ -593,6 +622,7 @@ void axvisor_linux_log_message(const u8 *message, size_t length)
 size_t axvisor_linux_host_get_cpu_num(void) { return num_online_cpus(); }
 size_t axvisor_linux_host_current_cpu(void) { return smp_processor_id(); }
 static DEFINE_PER_CPU(struct hrtimer, axvisor_host_timer);
+static DEFINE_PER_CPU(struct work_struct, axvisor_host_timer_work);
 static DEFINE_PER_CPU(bool, axvisor_host_timer_initialized);
 
 extern void axvisor_linux_timer_interrupt(void);
@@ -603,37 +633,58 @@ static void axvisor_linux_timer_work(struct work_struct *work)
 	axvisor_linux_timer_interrupt();
 }
 
-static DECLARE_WORK(axvisor_host_timer_work, axvisor_linux_timer_work);
-
 static enum hrtimer_restart axvisor_linux_timer_callback(struct hrtimer *timer)
 {
 	(void)timer;
-	schedule_work(&axvisor_host_timer_work);
+	schedule_work(this_cpu_ptr(&axvisor_host_timer_work));
 	return HRTIMER_NORESTART;
 }
 
 void axvisor_linux_host_init_percpu(void)
 {
 	struct hrtimer *timer;
+	struct work_struct *timer_work;
 	bool *initialized;
 
 	/* The caller may be a preemptible kthread; pin this short operation to the
 	 * CPU whose timer will be armed below. */
 	preempt_disable();
 	timer = this_cpu_ptr(&axvisor_host_timer);
+	timer_work = this_cpu_ptr(&axvisor_host_timer_work);
 	initialized = this_cpu_ptr(&axvisor_host_timer_initialized);
 	if (!*initialized) {
 		hrtimer_init(timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
 		timer->function = axvisor_linux_timer_callback;
+		INIT_WORK(timer_work, axvisor_linux_timer_work);
 		*initialized = true;
 	}
 	preempt_enable();
 }
 
+#define AXVISOR_CONSOLE_OUTPUT_CAPACITY 512
+static char axvisor_console_output[AXVISOR_CONSOLE_OUTPUT_CAPACITY];
+static size_t axvisor_console_output_length;
+static DEFINE_SPINLOCK(axvisor_console_output_lock);
+
 void axvisor_linux_console_write_bytes(const u8 *bytes, size_t length)
 {
-	if (bytes)
-		printk(KERN_INFO "%.*s", (int)length, (const char *)bytes);
+	unsigned long flags;
+	size_t i;
+
+	if (!bytes || !length)
+		return;
+
+	spin_lock_irqsave(&axvisor_console_output_lock, flags);
+	for (i = 0; i < length; i++) {
+		axvisor_console_output[axvisor_console_output_length++] = bytes[i];
+		if (bytes[i] == '\n' || axvisor_console_output_length ==
+				AXVISOR_CONSOLE_OUTPUT_CAPACITY) {
+			printk(KERN_INFO "%.*s", (int)axvisor_console_output_length,
+			       axvisor_console_output);
+			axvisor_console_output_length = 0;
+		}
+	}
+	spin_unlock_irqrestore(&axvisor_console_output_lock, flags);
 }
 
 /* HostIf::exit terminates the monitor. In the Linux host this powers off the
@@ -743,14 +794,17 @@ void axvisor_linux_time_set_oneshot_timer(u64 deadline_nanos)
 	u64 delay_nanos = deadline_nanos > now ? deadline_nanos - now : 1;
 	ktime_t expires = ktime_add_ns(ktime_get(), delay_nanos);
 	struct hrtimer *timer;
+	struct work_struct *timer_work;
 	bool *initialized;
 
 	preempt_disable();
 	timer = this_cpu_ptr(&axvisor_host_timer);
+	timer_work = this_cpu_ptr(&axvisor_host_timer_work);
 	initialized = this_cpu_ptr(&axvisor_host_timer_initialized);
 	if (!*initialized) {
 		hrtimer_init(timer, CLOCK_MONOTONIC, HRTIMER_MODE_REL);
 		timer->function = axvisor_linux_timer_callback;
+		INIT_WORK(timer_work, axvisor_linux_timer_work);
 		*initialized = true;
 	}
 	/* Guest exits can occur much faster than the vCPU timeslice.  Do not let
@@ -990,39 +1044,33 @@ unsigned long axvisor_linux_memory_alloc_frame(void)
 
 unsigned long axvisor_linux_memory_alloc_contiguous(size_t num_frames, size_t align)
 {
-	void *p;
+	struct page *pages;
+	unsigned long first_pfn, aligned_pfn, prefix, suffix;
+	size_t align_frames, total_frames;
 	gfp_t gfp = (irqs_disabled() || in_atomic()) ? GFP_ATOMIC : GFP_KERNEL;
 	if (!num_frames || num_frames > (SIZE_MAX >> PAGE_SHIFT))
 		return 0;
-	/* The buddy allocator cannot satisfy guest regions larger than
-	 * MAX_ORDER_NR_PAGES.  Ask Linux's migration/compaction-backed contiguous
-	 * allocator for those ranges so that they remain normal direct-mapped RAM
-	 * and can be returned through free_contig_range(). */
-	if (num_frames > MAX_ORDER_NR_PAGES) {
-		struct page *pages;
-		unsigned long phys;
-
-		if (gfp == GFP_ATOMIC)
-			return 0;
-		pages = alloc_contig_pages(num_frames, GFP_KERNEL,
-					 numa_node_id(), NULL);
-		if (!pages)
-			return 0;
-		phys = page_to_phys(pages);
-		if (align > 1 && (phys & (align - 1))) {
-			free_contig_range(page_to_pfn(pages), num_frames);
-			return 0;
-		}
-		p = page_address(pages);
-		memset(p, 0, num_frames << PAGE_SHIFT);
-		return phys;
-	}
-	p = alloc_pages_exact(num_frames << PAGE_SHIFT, gfp | __GFP_ZERO);
-	if (!p || (align > 1 && ((unsigned long)p & (align - 1)))) {
-		if (p) free_pages_exact(p, num_frames << PAGE_SHIFT);
+	if (gfp == GFP_ATOMIC || align < PAGE_SIZE || !is_power_of_2(align))
 		return 0;
-	}
-	return virt_to_phys(p);
+
+	align_frames = align >> PAGE_SHIFT;
+	if (check_add_overflow(num_frames, align_frames - 1, &total_frames))
+		return 0;
+	pages = alloc_contig_pages(total_frames, GFP_KERNEL, numa_node_id(), NULL);
+	if (!pages)
+		return 0;
+
+	first_pfn = page_to_pfn(pages);
+	aligned_pfn = ALIGN(first_pfn, align_frames);
+	prefix = aligned_pfn - first_pfn;
+	suffix = total_frames - prefix - num_frames;
+	if (prefix)
+		free_contig_range(first_pfn, prefix);
+	if (suffix)
+		free_contig_range(aligned_pfn + num_frames, suffix);
+	memset(page_address(pfn_to_page(aligned_pfn)), 0,
+	       num_frames << PAGE_SHIFT);
+	return PFN_PHYS(aligned_pfn);
 }
 
 void axvisor_linux_memory_dealloc_frame(unsigned long addr)
@@ -1034,11 +1082,7 @@ void axvisor_linux_memory_dealloc_contiguous(unsigned long addr, size_t num_fram
 {
 	if (!addr || !num_frames)
 		return;
-	if (num_frames > MAX_ORDER_NR_PAGES) {
-		free_contig_range(PHYS_PFN(addr), num_frames);
-		return;
-	}
-	free_pages_exact(phys_to_virt(addr), num_frames << PAGE_SHIFT);
+	free_contig_range(PHYS_PFN(addr), num_frames);
 }
 
 unsigned long axvisor_linux_memory_phys_to_virt(unsigned long addr)

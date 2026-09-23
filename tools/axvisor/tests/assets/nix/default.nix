@@ -9,11 +9,19 @@ let
       name = "gvisor-net-test.c";
     };
   };
+  qemuHostInitramfs = pkgs.callPackage ./qemu-host-initramfs.nix {
+    targetArch = target;
+    peerSource = builtins.path {
+      path = ../../programs/virtio_net_peer.c;
+      name = "virtio_net_peer.c";
+    };
+  };
 in {
   hostInitramfs = pkgs.callPackage ./host-initramfs.nix {
     inherit lkvm;
     busybox = pkgs.busybox;
   };
   hostInitramfsX86_64 = x86HostInitramfs;
+  hostInitramfsQemu = qemuHostInitramfs;
   inherit gvisorNetTestX86_64;
 }

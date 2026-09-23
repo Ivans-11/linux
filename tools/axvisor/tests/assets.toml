@@ -35,6 +35,20 @@ expression = "tests/assets/nix/default.nix"
 attribute = "hostInitramfsX86_64"
 target = "."
 
+[assets.host-initramfs-qemu-riscv64]
+kind = "nix"
+arch = "riscv64"
+expression = "tests/assets/nix/default.nix"
+attribute = "hostInitramfsQemu"
+target = "."
+
+[assets.host-initramfs-qemu-x86_64]
+kind = "nix"
+arch = "x86_64"
+expression = "tests/assets/nix/default.nix"
+attribute = "hostInitramfsQemu"
+target = "."
+
 [assets.gvisor-net-test-x86_64]
 kind = "nix"
 arch = "x86_64"
