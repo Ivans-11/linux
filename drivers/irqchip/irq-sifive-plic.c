@@ -5,6 +5,7 @@
  */
 #define pr_fmt(fmt) "riscv-plic: " fmt
 #include <linux/acpi.h>
+#include <linux/axvisor.h>
 #include <linux/cpu.h>
 #include <linux/interrupt.h>
 #include <linux/io.h>
@@ -20,9 +21,21 @@
 #include <linux/spinlock.h>
 #include <linux/syscore_ops.h>
 
-extern bool axvisor_linux_handle_irq(unsigned long vector);
-void axvisor_linux_handle_pending_external_irqs(void);
 #include <asm/smp.h>
+
+typedef bool (*axvisor_irq_handler_t)(unsigned long vector);
+
+static axvisor_irq_handler_t axvisor_linux_irq_handler;
+
+int axvisor_linux_register_irq_handler(bool (*handler)(unsigned long vector))
+{
+	if (!handler)
+		return -EINVAL;
+	if (cmpxchg(&axvisor_linux_irq_handler, NULL, handler))
+		return -EBUSY;
+	return 0;
+}
+EXPORT_SYMBOL_GPL(axvisor_linux_register_irq_handler);
 
 /*
  * This driver implements a version of the RISC-V PLIC with the actual layout
@@ -385,7 +398,9 @@ void axvisor_linux_handle_pending_external_irqs(void)
 		return;
 
 	while ((hwirq = readl(claim))) {
-		if (!axvisor_linux_handle_irq(hwirq)) {
+		axvisor_irq_handler_t handler_fn = READ_ONCE(axvisor_linux_irq_handler);
+
+		if (!handler_fn || !handler_fn(hwirq)) {
 			int err = generic_handle_domain_irq(handler->priv->irqdomain,
 							    hwirq);
 			if (unlikely(err))
@@ -394,6 +409,7 @@ void axvisor_linux_handle_pending_external_irqs(void)
 		}
 	}
 }
+EXPORT_SYMBOL_GPL(axvisor_linux_handle_pending_external_irqs);
 
 static void plic_handle_irq(struct irq_desc *desc)
 {

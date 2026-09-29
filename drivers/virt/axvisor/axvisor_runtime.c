@@ -16,7 +16,6 @@
 #include <linux/smp.h>
 #include <linux/percpu.h>
 #include <linux/spinlock.h>
-#include <linux/of_fdt.h>
 #include <linux/of.h>
 #include <linux/of_address.h>
 #include <linux/ioport.h>
@@ -24,6 +23,8 @@
 #include <linux/eventfd.h>
 #include <linux/interrupt.h>
 #include <linux/fs.h>
+#include <linux/console.h>
+#include <linux/kfifo.h>
 #include <linux/miscdevice.h>
 #include <linux/uaccess.h>
 #include <linux/workqueue.h>
@@ -559,10 +560,6 @@ int axvisor_linux_control_create_fd(u64 control_file, u64 mmap_area)
 }
 #endif
 
-/* Names expected by zerocopy, mapped to Linux's linker symbols. */
-asm(".globl _ex_table_start\n_ex_table_start = __start___ex_table\n"
-    ".globl _ex_table_end\n_ex_table_end = __stop___ex_table\n");
-
 /* ax-percpu custom-base integration.  Rust emits one initialized template
  * section; Linux allocates a writable copy for every possible CPU and the
  * ax-percpu backend selects a copy through _percpu_base_ptr(). */
@@ -661,30 +658,51 @@ void axvisor_linux_host_init_percpu(void)
 	preempt_enable();
 }
 
-#define AXVISOR_CONSOLE_OUTPUT_CAPACITY 512
-static char axvisor_console_output[AXVISOR_CONSOLE_OUTPUT_CAPACITY];
-static size_t axvisor_console_output_length;
+#define AXVISOR_CONSOLE_OUTPUT_CAPACITY (64 * 1024)
+static DEFINE_KFIFO(axvisor_console_output, u8,
+		    AXVISOR_CONSOLE_OUTPUT_CAPACITY);
 static DEFINE_SPINLOCK(axvisor_console_output_lock);
+static void axvisor_linux_console_output_work(struct work_struct *work);
+static DECLARE_WORK(axvisor_console_work, axvisor_linux_console_output_work);
+
+static void axvisor_linux_console_write_direct(const u8 *bytes, size_t length)
+{
+	struct console *console;
+	int cookie;
+
+	console_lock();
+	cookie = console_srcu_read_lock();
+	for_each_console_srcu(console) {
+		short flags = console_srcu_read_flags(console);
+
+		if (!(flags & CON_ENABLED) || (flags & CON_SUSPENDED) ||
+		    !console->write)
+			continue;
+		console->write(console, (const char *)bytes, length);
+	}
+	console_srcu_read_unlock(cookie);
+	console_unlock();
+}
+
+static void axvisor_linux_console_output_work(struct work_struct *work)
+{
+	u8 bytes[512];
+	unsigned int length;
+
+	(void)work;
+	while ((length = kfifo_out_spinlocked(&axvisor_console_output, bytes,
+					       sizeof(bytes),
+					       &axvisor_console_output_lock)))
+		axvisor_linux_console_write_direct(bytes, length);
+}
 
 void axvisor_linux_console_write_bytes(const u8 *bytes, size_t length)
 {
-	unsigned long flags;
-	size_t i;
-
 	if (!bytes || !length)
 		return;
-
-	spin_lock_irqsave(&axvisor_console_output_lock, flags);
-	for (i = 0; i < length; i++) {
-		axvisor_console_output[axvisor_console_output_length++] = bytes[i];
-		if (bytes[i] == '\n' || axvisor_console_output_length ==
-				AXVISOR_CONSOLE_OUTPUT_CAPACITY) {
-			printk(KERN_INFO "%.*s", (int)axvisor_console_output_length,
-			       axvisor_console_output);
-			axvisor_console_output_length = 0;
-		}
-	}
-	spin_unlock_irqrestore(&axvisor_console_output_lock, flags);
+	kfifo_in_spinlocked(&axvisor_console_output, bytes, length,
+			    &axvisor_console_output_lock);
+	schedule_work(&axvisor_console_work);
 }
 
 /* HostIf::exit terminates the monitor. In the Linux host this powers off the
@@ -819,7 +837,7 @@ static unsigned long axvisor_host_fdt_paddr_saved;
 void axvisor_linux_arch_capture_host_fdt(void)
 {
 #ifdef CONFIG_RISCV
-	axvisor_host_fdt_paddr_saved = initial_boot_params ? dtb_early_pa : 0;
+	axvisor_host_fdt_paddr_saved = axvisor_linux_boot_fdt_paddr();
 #else
 	axvisor_host_fdt_paddr_saved = 0;
 #endif
@@ -1142,7 +1160,7 @@ void axvisor_linux_memory_prepare_io_maps(void)
 	struct device_node *np;
 	unsigned int index;
 
-	for_each_of_allnodes(np) {
+	for (np = of_find_all_nodes(NULL); np; np = of_find_all_nodes(np)) {
 		for (index = 0; index < 8; index++) {
 			struct resource resource;
 			unsigned long page, end, size;

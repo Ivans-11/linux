@@ -290,10 +290,14 @@ def inject_initramfs_files(initramfs: Path, files: list[dict], case_dir: Path) -
 
 def stage_case(case_path: Path, case: dict) -> tuple[Path, Path | None, list[tuple[Path, str]]]:
     stage = WORK / "cases" / case["case"]
-    if stage.exists():
-        shutil.rmtree(stage)
+    stage.mkdir(parents=True, exist_ok=True)
     payload = stage / "payload"
+    if payload.exists():
+        shutil.rmtree(payload)
     payload.mkdir(parents=True)
+    payload_image_path = stage / "payload.ext2.img"
+    if payload_image_path.exists():
+        payload_image_path.unlink()
     image_dir = ensure_image(case["guest_image"]) if case.get("guest_image") else None
     if image_dir:
         copy_tree(image_dir, payload)
@@ -312,7 +316,7 @@ def stage_case(case_path: Path, case: dict) -> tuple[Path, Path | None, list[tup
             raise SystemExit(f"{case_path}: staged payload is missing {name}")
     payload_image = None
     if "{control_payload_image}" in " ".join(case.get("extra_qemu_args", [])):
-        payload_image = make_ext2(payload, stage / "payload.ext2.img", int(case.get("payload_extra_bytes", 0)))
+        payload_image = make_ext2(payload, payload_image_path, int(case.get("payload_extra_bytes", 0)))
     host_assets = declared_assets(case, "host_initramfs_assets")
     return stage, payload_image, host_assets
 
@@ -336,8 +340,12 @@ def stage_vm_config(case_path: Path, case: dict, stage: Path, image_dir: Path | 
     return destination
 
 
-def prepare_initramfs(case: dict, host_assets: list[tuple[Path, str]]) -> Path | None:
-    if not case.get("test_files") and not host_assets and case.get("mode") != "static":
+def prepare_initramfs(
+    case: dict,
+    host_assets: list[tuple[Path, str]],
+    module: Path | None = None,
+) -> Path | None:
+    if not case.get("test_files") and not host_assets and case.get("mode") != "static" and not module:
         return None
     tests = ",".join(
         f"{item['source']}:{item['target'].lstrip('/')}"
@@ -347,7 +355,10 @@ def prepare_initramfs(case: dict, host_assets: list[tuple[Path, str]]) -> Path |
     builder = ROOT / "build-test-initramfs.sh"
     if not builder.is_file():
         raise SystemExit(f"test initramfs builder is missing: {builder}")
-    assets = ",".join(f"{source}:{target}" for source, target in host_assets)
+    assets_list = list(host_assets)
+    if module:
+        assets_list.append((module, "test/axvisor_linux.ko"))
+    assets = ",".join(f"{source}:{target}" for source, target in assets_list)
     command = [str(builder), case["arch"], tests, init_source or "", assets]
     output = subprocess.check_output(command, cwd=ROOT, text=True)
     image = Path(output.strip().splitlines()[-1])
@@ -415,8 +426,16 @@ def select_core_features(case: dict, configured: str) -> list[str]:
     return features
 
 
-def build_host(case: dict, initramfs: Path | None, vm_config: Path | None) -> Path:
+def build_host(
+    case: dict,
+    initramfs: Path | None,
+    vm_config: Path | None,
+    build_stage: str,
+) -> tuple[Path | None, Path | None]:
+    build_dir = WORK / ("build-riscv" if case["arch"] == "riscv64" else "build-x86")
+    image = build_dir / ("arch/riscv/boot/Image" if case["arch"] == "riscv64" else "arch/x86/boot/bzImage")
     env = os.environ.copy()
+    env["AXVISOR_BUILD_STAGE"] = build_stage
     if initramfs:
         env["AXVISOR_INITRAMFS"] = str(initramfs)
     if vm_config:
@@ -426,11 +445,13 @@ def build_host(case: dict, initramfs: Path | None, vm_config: Path | None) -> Pa
     if case["mode"] == "control":
         env["AXVISOR_HOST_FEATURES"] = "control"
     subprocess.run([str(ROOT / "build-host.sh"), "--arch", case["arch"]], cwd=ROOT, env=env, check=True)
-    build_dir = WORK / ("build-riscv" if case["arch"] == "riscv64" else "build-x86")
-    image = build_dir / ("arch/riscv/boot/Image" if case["arch"] == "riscv64" else "arch/x86/boot/bzImage")
-    if not image.is_file():
+    if build_stage in ("image", "all") and not image.is_file():
         raise SystemExit(f"host kernel was not built: {image}")
-    return image
+    module = build_dir / "drivers/virt/axvisor/axvisor_linux.ko"
+    if build_stage in ("module", "all") and not module.is_file():
+        raise SystemExit(f"AxVisor host module was not built: {module}")
+    return (image if build_stage in ("image", "all") else None,
+            module if build_stage in ("module", "all") else None)
 
 
 def render_args(args: list[str], stage: Path, image_dir: Path | None, payload_image: Path | None) -> list[str]:
@@ -629,14 +650,18 @@ def main() -> int:
     stage, payload_image, host_assets = stage_case(case_path, case)
     image_dir = ensure_image(case["guest_image"]) if case.get("guest_image") else None
     vm_config = stage_vm_config(case_path, case, stage, image_dir)
-    initramfs = prepare_initramfs(case, host_assets)
     if case.get("run_command"):
+        initramfs = prepare_initramfs(case, host_assets)
         command = render_args(case["run_command"], stage, None, payload_image)
     else:
-        kernel = build_host(case, initramfs, vm_config)
+        _, module = build_host(case, None, vm_config, "module")
+        assert module is not None
+        initramfs = prepare_initramfs(case, host_assets, module)
+        kernel, _ = build_host(case, initramfs, vm_config, "image")
+        assert kernel is not None
         command = [host["qemu_binary"], *host.get("qemu_args", [])]
         command += ["-kernel", str(kernel)]
-        cmdline = case.get("host_cmdline", "console=ttyS0 earlycon=sbi panic=-1 init=/bin/sh")
+        cmdline = case.get("host_cmdline", "console=ttyS0 earlycon=sbi panic=-1 init=/init")
         if case["mode"] == "control":
             cmdline += " axvisor_linux.control=1"
         if case["mode"] == "conformance":

@@ -1,6 +1,6 @@
 #!/bin/busybox sh
 
-# Host init used by cases that launch a userspace VMM (lkvm, Firecracker, ...).
+# Host init used by AxVisor cases after the loadable module has been packaged.
 # The runner supplies /bin/busybox as a declared asset.  No case-specific
 # binary or command is embedded here; interactions remain in case.toml.
 # Install the BusyBox applet links once so declarative case interactions can
@@ -14,6 +14,15 @@
 /bin/busybox mount -t proc none /proc 2>/dev/null || true
 /bin/busybox mount -t sysfs none /sys 2>/dev/null || true
 /bin/busybox mkdir -p /ext2
+if test -f /test/axvisor_linux.ko; then
+	module_args=
+	/bin/busybox grep -qw 'axvisor_linux.control=1' /proc/cmdline && \
+		module_args="$module_args control=1"
+	/bin/busybox grep -qw 'axvisor_linux.conformance=1' /proc/cmdline && \
+		module_args="$module_args conformance=1"
+	/bin/busybox insmod /test/axvisor_linux.ko $module_args || \
+		echo "AXVISOR_MODULE_LOAD_FAILED"
+fi
 PS1='~ # '
 export PS1
 # PID 1 has no controlling terminal when launched from an initramfs.  Attach

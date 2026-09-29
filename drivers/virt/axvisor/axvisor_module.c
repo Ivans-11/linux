@@ -1,13 +1,15 @@
 // SPDX-License-Identifier: GPL-2.0
+#include <linux/completion.h>
 #include <linux/init.h>
+#include <linux/kthread.h>
 #include <linux/module.h>
 #include <linux/printk.h>
-#include <linux/kthread.h>
 
 #include "axvisor_ffi.h"
 
 #ifdef CONFIG_AXVISOR_LINUX_CONTROL
 static bool axvisor_control_mode;
+static DECLARE_COMPLETION(axvisor_control_ready);
 module_param_named(control, axvisor_control_mode, bool, 0444);
 MODULE_PARM_DESC(control,
 		 "initialize the AxVisor KVM control endpoint instead of static VMs");
@@ -26,6 +28,7 @@ static int axvisor_linux_core_thread(void *unused)
 
 		if (ret)
 			pr_err("axvisor-linux: control initialization failed (%d)\n", ret);
+		complete(&axvisor_control_ready);
 		return ret;
 	}
 #endif
@@ -57,6 +60,13 @@ static int __init axvisor_linux_init(void)
 		pr_err("axvisor-linux: failed to prepare per-CPU storage (%d)\n", ret);
 		return ret;
 	}
+#ifdef CONFIG_RISCV
+	ret = axvisor_linux_register_irq_handler(axvisor_linux_handle_irq);
+	if (ret) {
+		pr_err("axvisor-linux: failed to register IRQ handler (%d)\n", ret);
+		return ret;
+	}
+#endif
 	pr_info("axvisor-linux: starting AxVisor core kthread\n");
 	task = kthread_create(axvisor_linux_core_thread, NULL, "axvisor-core");
 	if (IS_ERR(task)) {
@@ -67,6 +77,13 @@ static int __init axvisor_linux_init(void)
 	 * initialization tasks enable virtualization on the remaining CPUs. */
 	kthread_bind(task, 0);
 	wake_up_process(task);
+#ifdef CONFIG_AXVISOR_LINUX_CONTROL
+	if (axvisor_control_mode)
+		wait_for_completion(&axvisor_control_ready);
+#endif
 	return 0;
 }
-late_initcall(axvisor_linux_init);
+module_init(axvisor_linux_init);
+
+MODULE_DESCRIPTION("AxVisor Linux host provider");
+MODULE_LICENSE("GPL");

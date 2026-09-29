@@ -7,6 +7,7 @@
 
 #define pr_fmt(fmt) "riscv-intc: " fmt
 #include <linux/acpi.h>
+#include <linux/axvisor.h>
 #include <linux/atomic.h>
 #include <linux/bits.h>
 #include <linux/cpu.h>
@@ -40,6 +41,7 @@ void axvisor_linux_handle_pending_software_irq(void)
 		pr_warn_ratelimited(
 			"Failed to handle AxVisor software interrupt\n");
 }
+EXPORT_SYMBOL_GPL(axvisor_linux_handle_pending_software_irq);
 
 static void riscv_intc_aia_irq(struct pt_regs *regs)
 {

@@ -3,6 +3,7 @@
 #define _AXVISOR_LINUX_FFI_H
 
 #include <linux/types.h>
+#include <linux/axvisor.h>
 
 void axvisor_linux_core_boot(void) __noreturn;
 #ifdef CONFIG_AXVISOR_LINUX_CONFORMANCE
@@ -17,6 +18,8 @@ size_t axvisor_linux_host_get_cpu_num(void);
 size_t axvisor_linux_host_current_cpu(void);
 int axvisor_linux_percpu_prepare(void);
 void axvisor_linux_host_init_percpu(void);
+void *_percpu_base_ptr(unsigned long cpu);
+unsigned long ax_percpu_current_base(void);
 void axvisor_linux_console_write_bytes(const u8 *bytes, size_t length);
 void axvisor_linux_console_enqueue_bytes(const u8 *bytes, size_t length);
 size_t axvisor_linux_console_read_bytes(u8 *bytes, size_t length);
@@ -73,14 +76,6 @@ unsigned long axvisor_linux_current_task(void);
 bool axvisor_linux_handle_irq(unsigned long vector);
 bool axvisor_linux_handle_registered_irq(unsigned long vector);
 bool axvisor_linux_prepare_irq_vector(unsigned long vector);
-#ifdef CONFIG_X86
-bool axvisor_linux_dispatch_host_irq(unsigned long vector);
-bool axvisor_linux_dispatch_host_system_irq(unsigned long vector);
-#endif
-#ifdef CONFIG_RISCV
-void axvisor_linux_handle_pending_external_irqs(void);
-void axvisor_linux_handle_pending_software_irq(void);
-#endif
 #ifdef CONFIG_AXVISOR_LINUX_CONTROL
 int axvisor_linux_core_control_boot(void);
 #endif

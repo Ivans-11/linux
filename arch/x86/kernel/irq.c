@@ -2,6 +2,7 @@
 /*
  * Common interrupt code for 32 and 64 bit
  */
+#include <linux/axvisor.h>
 #include <linux/cpu.h>
 #include <linux/interrupt.h>
 #include <linux/kernel_stat.h>
@@ -292,6 +293,7 @@ bool axvisor_linux_dispatch_host_irq(unsigned long vector)
 	local_irq_restore(flags);
 	return true;
 }
+EXPORT_SYMBOL_GPL(axvisor_linux_dispatch_host_irq);
 
 /*
  * VMX exits happen before Linux's IDT entry code creates pt_regs.  Re-enter
@@ -329,6 +331,7 @@ bool axvisor_linux_dispatch_host_system_irq(unsigned long vector)
 	local_irq_restore(flags);
 	return true;
 }
+EXPORT_SYMBOL_GPL(axvisor_linux_dispatch_host_system_irq);
 
 
 /*

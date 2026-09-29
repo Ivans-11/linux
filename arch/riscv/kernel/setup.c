@@ -9,6 +9,7 @@
  */
 
 #include <linux/acpi.h>
+#include <linux/axvisor.h>
 #include <linux/cpu.h>
 #include <linux/init.h>
 #include <linux/mm.h>
@@ -50,6 +51,20 @@ atomic_t hart_lottery __section(".sdata")
 #endif
 ;
 unsigned long boot_cpu_hartid;
+static unsigned long axvisor_boot_fdt_paddr __ro_after_init;
+
+static int __init axvisor_linux_capture_boot_fdt(void)
+{
+	axvisor_boot_fdt_paddr = dtb_early_pa;
+	return 0;
+}
+early_initcall(axvisor_linux_capture_boot_fdt);
+
+unsigned long axvisor_linux_boot_fdt_paddr(void)
+{
+	return axvisor_boot_fdt_paddr;
+}
+EXPORT_SYMBOL_GPL(axvisor_linux_boot_fdt_paddr);
 
 /*
  * Place kernel memory regions on the resource tree so that

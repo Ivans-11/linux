@@ -8,9 +8,9 @@ Run the commands below from `tools/axvisor`.
 
 The Linux provider implements all current
 `axvisor_api` traits and the build links the pinned `axvisor_core` into the
-kernel image. `ax-percpu` uses its external-base backend so Linux keeps
-ownership of its architecture thread-pointer registers. Memory operations are
-backed by Linux page allocators and address translation.
+`axvisor_linux.ko` host module. `ax-percpu` uses its external-base backend so
+Linux keeps ownership of its architecture thread-pointer registers. Memory
+operations are backed by Linux page allocators and address translation.
 `TaskIf::spawn_task_raw` dispatches through a Linux kthread, with completion
 objects for `join_task` and single-CPU affinity support. Wait-queue operations
 use generation-based wakeups and remain a lightweight bring-up implementation.
@@ -36,6 +36,13 @@ required.
 The host kernel is intentionally built with `CONFIG_KVM=n`.  AxVisor and
 native Linux KVM must not own the same RISC-V H-extension state concurrently;
 the control-mode provider will expose `/dev/kvm` only when native KVM is absent.
+
+The build places the loadable provider at
+`.work/build-riscv/drivers/virt/axvisor/axvisor_linux.ko` (or the corresponding
+`build-x86` path). Load the direct-boot provider with `insmod axvisor_linux.ko`.
+A control-enabled build accepts `insmod axvisor_linux.ko control=1`. The module
+cannot currently be unloaded after AxVisor starts because its vCPU tasks and
+registered host resources are long-lived.
 
 The static-guest path has been exercised through guest Linux kernel startup,
 including virtual PLIC/timer handling. Passing a host virtio device through to

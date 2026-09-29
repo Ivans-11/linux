@@ -1,13 +1,13 @@
 config AXVISOR_LINUX_BRIDGE
-	bool "AxVisor Linux host bridge"
+	tristate "AxVisor Linux host bridge"
 	default n
 	help
-	  Build the Linux host provider and link the no_std AxVisor Rust domain
-	  into the kernel.
+	  Build the Linux host provider and link the no_std AxVisor Rust domain.
+	  Select M to build the provider as axvisor_linux.ko.
 
 config AXVISOR_LINUX_CONTROL
 	bool "AxVisor Linux control endpoint"
-	depends on AXVISOR_LINUX_BRIDGE
+	depends on AXVISOR_LINUX_BRIDGE != n
 	select MISC_DEVICES
 	default n
 	help
@@ -15,7 +15,7 @@ config AXVISOR_LINUX_CONTROL
 
 config AXVISOR_LINUX_CONFORMANCE
 	bool "AxVisor host-contract conformance runner"
-	depends on AXVISOR_LINUX_BRIDGE
+	depends on AXVISOR_LINUX_BRIDGE != n
 	default n
 	help
 	  Build the host-only runner for the shared AxVisor contract tests.
