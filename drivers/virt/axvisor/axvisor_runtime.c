@@ -1063,16 +1063,44 @@ unsigned long axvisor_linux_memory_alloc_frame(void)
 unsigned long axvisor_linux_memory_alloc_contiguous(size_t num_frames, size_t align)
 {
 	struct page *pages;
+	void *memory;
 	unsigned long first_pfn, aligned_pfn, prefix, suffix;
 	size_t align_frames, total_frames;
 	gfp_t gfp = (irqs_disabled() || in_atomic()) ? GFP_ATOMIC : GFP_KERNEL;
 	if (!num_frames || num_frames > (SIZE_MAX >> PAGE_SHIFT))
 		return 0;
-	if (gfp == GFP_ATOMIC || align < PAGE_SIZE || !is_power_of_2(align))
+	if (align < PAGE_SIZE || !is_power_of_2(align))
 		return 0;
 
 	align_frames = align >> PAGE_SHIFT;
 	if (check_add_overflow(num_frames, align_frames - 1, &total_frames))
+		return 0;
+
+	/* SVM allocates its IOPM and MSRPM while the core holds an IRQ-safe
+	 * lock. Small requests can still be served by the buddy allocator;
+	 * reserve enough pages to satisfy the requested physical alignment and
+	 * return the unused prefix and suffix immediately. */
+	if (num_frames <= MAX_ORDER_NR_PAGES) {
+		if (total_frames > MAX_ORDER_NR_PAGES)
+			return 0;
+		memory = alloc_pages_exact(total_frames << PAGE_SHIFT,
+					   gfp | __GFP_ZERO);
+		if (!memory)
+			return 0;
+
+		first_pfn = page_to_pfn(virt_to_page(memory));
+		aligned_pfn = ALIGN(first_pfn, align_frames);
+		prefix = aligned_pfn - first_pfn;
+		suffix = total_frames - prefix - num_frames;
+		if (prefix)
+			free_pages_exact(memory, prefix << PAGE_SHIFT);
+		if (suffix)
+			free_pages_exact(phys_to_virt(PFN_PHYS(aligned_pfn + num_frames)),
+					 suffix << PAGE_SHIFT);
+		return PFN_PHYS(aligned_pfn);
+	}
+
+	if (gfp == GFP_ATOMIC)
 		return 0;
 	pages = alloc_contig_pages(total_frames, GFP_KERNEL, numa_node_id(), NULL);
 	if (!pages)
@@ -1100,6 +1128,10 @@ void axvisor_linux_memory_dealloc_contiguous(unsigned long addr, size_t num_fram
 {
 	if (!addr || !num_frames)
 		return;
+	if (num_frames <= MAX_ORDER_NR_PAGES) {
+		free_pages_exact(phys_to_virt(addr), num_frames << PAGE_SHIFT);
+		return;
+	}
 	free_contig_range(PHYS_PFN(addr), num_frames);
 }
 
