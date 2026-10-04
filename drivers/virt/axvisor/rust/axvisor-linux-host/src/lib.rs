@@ -54,6 +54,8 @@ unsafe extern "C" {
     fn axvisor_linux_wait_queue_create() -> usize;
     fn axvisor_linux_wait_queue_destroy(queue: usize);
     fn axvisor_linux_wait_queue_wait(queue: usize);
+    fn axvisor_linux_wait_queue_generation(queue: usize) -> u32;
+    fn axvisor_linux_wait_queue_wait_generation(queue: usize, generation: u32);
     fn axvisor_linux_wait_queue_wake_one(queue: usize);
     fn axvisor_linux_wait_queue_wake_all(queue: usize);
     fn axvisor_linux_spawn_task(
@@ -210,7 +212,11 @@ impl SyncIf for LinuxHost {
     }
     fn wait_queue_wait_until(queue: usize, condition: Box<dyn Fn() -> bool + Send + 'static>) {
         while !condition() {
-            Self::wait_queue_wait(queue);
+            let generation = unsafe { axvisor_linux_wait_queue_generation(queue) };
+            if condition() {
+                break;
+            }
+            unsafe { axvisor_linux_wait_queue_wait_generation(queue, generation) };
         }
     }
     fn wait_queue_wake_one(queue: usize) {

@@ -937,18 +937,35 @@ void axvisor_linux_wait_queue_destroy(unsigned long handle)
 void axvisor_linux_wait_queue_wait(unsigned long handle)
 {
 	struct axvisor_wait_queue *queue = (void *)handle;
-	int generation;
+	unsigned int generation;
 
 	if (!queue)
 		return;
-	generation = atomic_read(&queue->generation);
+	generation = (unsigned int)atomic_read_acquire(&queue->generation);
+	axvisor_linux_wait_queue_wait_generation(handle, generation);
+}
+
+unsigned int axvisor_linux_wait_queue_generation(unsigned long handle)
+{
+	struct axvisor_wait_queue *queue = (void *)handle;
+
+	return queue ? (unsigned int)atomic_read_acquire(&queue->generation) : 0;
+}
+
+void axvisor_linux_wait_queue_wait_generation(unsigned long handle,
+					       unsigned int generation)
+{
+	struct axvisor_wait_queue *queue = (void *)handle;
+
+	if (!queue)
+		return;
 	if (irqs_disabled() || in_atomic()) {
-		while (atomic_read(&queue->generation) == generation)
+		while ((unsigned int)atomic_read_acquire(&queue->generation) == generation)
 			cpu_relax();
 		return;
 	}
 	wait_event(queue->head,
-		   atomic_read(&queue->generation) != generation);
+		   (unsigned int)atomic_read_acquire(&queue->generation) != generation);
 }
 
 void axvisor_linux_wait_queue_wake_one(unsigned long handle)
@@ -957,7 +974,7 @@ void axvisor_linux_wait_queue_wake_one(unsigned long handle)
 
 	if (!queue)
 		return;
-	atomic_inc(&queue->generation);
+	atomic_inc_return_release(&queue->generation);
 	wake_up(&queue->head);
 }
 
@@ -967,7 +984,7 @@ void axvisor_linux_wait_queue_wake_all(unsigned long handle)
 
 	if (!queue)
 		return;
-	atomic_inc(&queue->generation);
+	atomic_inc_return_release(&queue->generation);
 	wake_up_all(&queue->head);
 }
 
