@@ -1,7 +1,7 @@
 { target ? "riscv64" }:
 let
   pkgs = import ./sources.nix { inherit target; };
-  lkvm = pkgs.callPackage ./lkvm.nix { };
+  lkvm = pkgs.callPackage ./lkvm.nix { targetArch = target; };
   x86HostInitramfs = pkgs.callPackage ./x86-host-initramfs.nix { };
   gvisorNetTestX86_64 = pkgs.pkgsStatic.callPackage ./gvisor-net-test.nix {
     source = builtins.path {

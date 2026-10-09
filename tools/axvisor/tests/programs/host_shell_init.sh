@@ -29,9 +29,11 @@ export PS1
 # the shell explicitly to the serial device and restart it if a nested VMM
 # closes the session.  This is the same transport used by the previously
 # validated AxVisor host initramfs and does not require a host-side PTY helper.
+console=/dev/ttyS0
+test -c /dev/ttyAMA0 && console=/dev/ttyAMA0
 while :; do
 	# A terminal-mode VMM may use stdin's terminal file for all three guest
 	# standard streams.  Open it read/write before duplicating it so stdout
 	# remains writable in that mode (gVisor's `runsc do` relies on this).
-	/bin/busybox sh -i <>/dev/ttyS0 1>&0 2>&0
+	/bin/busybox sh -i <>"$console" 1>&0 2>&0
 done

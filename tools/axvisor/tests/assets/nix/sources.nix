@@ -6,6 +6,8 @@ let
   };
   crossSystem = if target == "riscv64" then
     "riscv64-unknown-linux-gnu"
+  else if target == "aarch64" then
+    "aarch64-unknown-linux-gnu"
   else if target == "x86_64" then
     "x86_64-unknown-linux-gnu"
   else

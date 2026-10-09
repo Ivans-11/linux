@@ -1,4 +1,10 @@
-{ stdenv, fetchFromGitHub, dtc }:
+{ stdenv, fetchFromGitHub, dtc, targetArch }:
+let
+  makeArch = if targetArch == "riscv64" then "riscv"
+    else if targetArch == "aarch64" then "arm64"
+    else throw "unsupported lkvm target: ${targetArch}";
+  archFlags = if targetArch == "riscv64" then "RISCV_XLEN=64" else "";
+in
 stdenv.mkDerivation {
   pname = "lkvm";
   version = "2026-06-07";
@@ -17,7 +23,7 @@ stdenv.mkDerivation {
     mkdir libfdt
     ln -s ${dtc}/include/libfdt.h ${dtc}/include/libfdt_env.h ${dtc}/include/fdt.h libfdt/
     ln -s ${dtc}/lib/libfdt.a libfdt/
-    make ARCH=riscv RISCV_XLEN=64 CROSS_COMPILE=${stdenv.cc.targetPrefix} \
+    make ARCH=${makeArch} ${archFlags} CROSS_COMPILE=${stdenv.cc.targetPrefix} \
       LIBFDT_DIR=$PWD/libfdt V=1 WERROR=0 lkvm
     runHook postBuild
   '';

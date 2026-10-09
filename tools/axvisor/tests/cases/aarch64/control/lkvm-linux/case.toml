@@ -1,0 +1,39 @@
+arch = "aarch64"
+mode = "control"
+case = "aarch64-control-lkvm-linux"
+host_profile = "aarch64-qemu"
+status = "active"
+host_cmdline = "console=ttyAMA0 earlycon=pl011,0x09000000 panic=-1 init=/init"
+
+guest_image = "qemu-aarch64-linux"
+payload_files = ["qemu-aarch64", "initramfs.cpio.gz"]
+payload_assets = []
+initramfs_init = "tests/programs/host_shell_init.sh"
+host_initramfs_assets = ["host-initramfs-aarch64"]
+test_files = []
+guest_initramfs_files = [
+  { source = "guest/check.sh", target = "/test/aarch64-lkvm-linux.sh" },
+]
+timeout_secs = 600
+success_regex = [
+  "(?s)Run /test/aarch64-lkvm-linux\\.sh as init process.*reboot: Power down.*Info: KVM session ended normally\\.",
+]
+fail_regex = [
+  "(?i)kernel panic", "(?i)panicked at", "(?i)permission denied",
+  "(?m)^aarch64 lkvm linux test fail:",
+]
+shell_prompt = "~ # "
+extra_qemu_args = [
+  "-drive",
+  "if=none,format=raw,id=lkvm_linux_payload,file={control_payload_image}",
+  "-device",
+  "virtio-blk-device,drive=lkvm_linux_payload",
+]
+
+[[interactions]]
+expect = "~ # "
+send = "umount /ext2 2>/dev/null; mount -t ext2 /dev/vda /ext2"
+
+[[interactions]]
+expect = "~ # "
+send = "/test/lkvm run --dev /dev/kvm --nodefaults --console serial --irqchip gicv3 --virtio-transport mmio -c 1 -m 256M -k /ext2/qemu-aarch64 -i /ext2/initramfs.cpio.gz -p 'console=ttyS0 earlycon=uart,mmio,0x1000000 rdinit=/test/aarch64-lkvm-linux.sh'"

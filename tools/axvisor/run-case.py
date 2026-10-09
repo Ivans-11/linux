@@ -415,6 +415,7 @@ def select_core_features(case: dict, configured: str) -> list[str]:
         add_feature(features, "sstc")
         return features
     if case["arch"] == "aarch64":
+        add_feature(features, "ept-level-4")
         return features
     accel = resolve_x86_accel()
     opposite = "svm" if accel == "vmx" else "vmx"
