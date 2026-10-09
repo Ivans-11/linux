@@ -1,0 +1,11 @@
+arch = "aarch64"
+qemu_binary = "qemu-system-aarch64"
+
+qemu_args = [
+  "-machine", "virt,virtualization=on,gic-version=3",
+  "-cpu", "max,sve=off,pauth=off,sme=off",
+  "-smp", "2",
+  "-m", "1G",
+  "-nographic",
+  "-no-reboot",
+]

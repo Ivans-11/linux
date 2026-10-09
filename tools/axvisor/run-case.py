@@ -414,7 +414,8 @@ def select_core_features(case: dict, configured: str) -> list[str]:
     if case["arch"] == "riscv64":
         add_feature(features, "sstc")
         return features
-
+    if case["arch"] == "aarch64":
+        return features
     accel = resolve_x86_accel()
     opposite = "svm" if accel == "vmx" else "vmx"
     if opposite in features:
@@ -432,8 +433,17 @@ def build_host(
     vm_config: Path | None,
     build_stage: str,
 ) -> tuple[Path | None, Path | None]:
-    build_dir = WORK / ("build-riscv" if case["arch"] == "riscv64" else "build-x86")
-    image = build_dir / ("arch/riscv/boot/Image" if case["arch"] == "riscv64" else "arch/x86/boot/bzImage")
+    build_layout = {
+        "aarch64": ("build-aarch64", "arch/arm64/boot/Image"),
+        "riscv64": ("build-riscv", "arch/riscv/boot/Image"),
+        "x86_64": ("build-x86", "arch/x86/boot/bzImage"),
+    }
+    try:
+        build_name, image_name = build_layout[case["arch"]]
+    except KeyError as exc:
+        raise SystemExit(f"unsupported host architecture: {case['arch']}") from exc
+    build_dir = WORK / build_name
+    image = build_dir / image_name
     env = os.environ.copy()
     env["AXVISOR_BUILD_STAGE"] = build_stage
     if initramfs:

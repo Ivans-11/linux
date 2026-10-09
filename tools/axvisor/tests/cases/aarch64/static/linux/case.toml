@@ -1,0 +1,16 @@
+arch = "aarch64"
+mode = "static"
+case = "aarch64-static-linux"
+host_profile = "aarch64-qemu"
+status = "active"
+
+guest = "linux"
+guest_image = "qemu-aarch64-linux"
+vm_config = "vm.toml"
+payload_files = ["qemu-aarch64", "initramfs.cpio.gz"]
+payload_assets = []
+test_files = []
+timeout_secs = 180
+success_regex = ["(?m)^test pass!\\s*$"]
+fail_regex = []
+host_cmdline = "console=ttyAMA0 earlycon=pl011,0x09000000 panic=-1 init=/init"

@@ -13,6 +13,9 @@ bool axvisor_linux_dispatch_host_system_irq(unsigned long vector);
 int axvisor_linux_register_irq_handler(bool (*handler)(unsigned long vector));
 void axvisor_linux_handle_pending_external_irqs(void);
 void axvisor_linux_handle_pending_software_irq(void);
+#endif
+
+#if defined(CONFIG_RISCV) || defined(CONFIG_ARM64)
 unsigned long axvisor_linux_boot_fdt_paddr(void);
 #endif
 

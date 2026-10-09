@@ -61,6 +61,12 @@ unsigned long axvisor_linux_arch_host_fdt_paddr(void);
 void axvisor_linux_arch_capture_host_fdt(void);
 void axvisor_linux_arch_remote_hfence_vvma_all(void);
 unsigned int axvisor_linux_arch_host_tsc_frequency_mhz(void);
+#ifdef CONFIG_ARM64
+bool axvisor_linux_arch_inject_virtual_irq(u8 vector);
+unsigned long axvisor_linux_arch_gicd_base(void);
+unsigned long axvisor_linux_arch_gicr_base(void);
+u64 axvisor_linux_arch_fetch_irq(void);
+#endif
 void *axvisor_linux_alloc(size_t size, size_t align);
 void axvisor_linux_dealloc(void *ptr);
 void axvisor_linux_task_yield(void);

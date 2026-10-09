@@ -194,7 +194,7 @@ def build_asset(label: str, spec: dict, arch: str) -> Path:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--arch", required=True, choices=("riscv64", "x86_64"))
+    parser.add_argument("--arch", required=True, choices=("aarch64", "riscv64", "x86_64"))
     parser.add_argument("--asset", action="append", required=True)
     args = parser.parse_args()
     catalog = tomllib.loads(CATALOG_PATH.read_text())

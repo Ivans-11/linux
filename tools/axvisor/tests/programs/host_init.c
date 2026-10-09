@@ -1,6 +1,38 @@
 // Minimal host init for cases whose workload runs in an AxVisor guest.
 // Load the host module, then keep PID 1 alive while AxVisor owns the machine.
-#if defined(__riscv) && __riscv_xlen == 64
+#if defined(__aarch64__)
+#define SYS_MOUNT 40
+#define SYS_OPENAT 56
+#define SYS_CLOSE 57
+#define SYS_FINIT_MODULE 273
+static long syscall1(long nr, long a0)
+{
+	register long x0 __asm__("x0") = a0;
+	register long x8 __asm__("x8") = nr;
+	__asm__ volatile("svc #0" : "+r"(x0) : "r"(x8) : "memory");
+	return x0;
+}
+static long syscall3(long nr, long a0, long a1, long a2)
+{
+	register long x0 __asm__("x0") = a0;
+	register long x1 __asm__("x1") = a1;
+	register long x2 __asm__("x2") = a2;
+	register long x8 __asm__("x8") = nr;
+	__asm__ volatile("svc #0" : "+r"(x0) : "r"(x1), "r"(x2), "r"(x8) : "memory");
+	return x0;
+}
+static long syscall5(long nr, long a0, long a1, long a2, long a3, long a4)
+{
+	register long x0 __asm__("x0") = a0;
+	register long x1 __asm__("x1") = a1;
+	register long x2 __asm__("x2") = a2;
+	register long x3 __asm__("x3") = a3;
+	register long x4 __asm__("x4") = a4;
+	register long x8 __asm__("x8") = nr;
+	__asm__ volatile("svc #0" : "+r"(x0) : "r"(x1), "r"(x2), "r"(x3), "r"(x4), "r"(x8) : "memory");
+	return x0;
+}
+#elif defined(__riscv) && __riscv_xlen == 64
 #define SYS_MOUNT 40
 #define SYS_OPENAT 56
 #define SYS_CLOSE 57

@@ -4,6 +4,9 @@
 #include <linux/kthread.h>
 #include <linux/module.h>
 #include <linux/printk.h>
+#ifdef CONFIG_ARM64
+#include <asm/virt.h>
+#endif
 
 #include "axvisor_ffi.h"
 
@@ -39,6 +42,13 @@ static int __init axvisor_linux_init(void)
 {
 	struct task_struct *task;
 	int ret;
+
+#ifdef CONFIG_ARM64
+	if (!is_kernel_in_hyp_mode() || !has_vhe()) {
+		pr_err("axvisor-linux: ARM64 host requires EL2 with VHE\n");
+		return -EOPNOTSUPP;
+	}
+#endif
 
 	ret = axvisor_linux_console_register_endpoint();
 	if (ret) {

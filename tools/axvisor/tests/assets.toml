@@ -18,6 +18,13 @@ url = "https://github.com/arceos-hypervisor/axvisor-guest/releases/download/v0.0
 sha256 = "fcbbb07f3624c370df4b703d3d2862e56ad022b84558074ec6e2282844486d4e"
 archive = true
 
+[assets.qemu-aarch64-linux]
+kind = "download"
+arch = "aarch64"
+url = "https://github.com/arceos-hypervisor/axvisor-guest/releases/download/v0.0.25/qemu_aarch64_linux.tar.gz"
+sha256 = "83a8bf28a0a4dad23055d13952b76da3f03207e97dfd27631ce0d121209ad8bd"
+archive = true
+
 # The RISC-V host initramfs is built by a pinned Nix expression. It contains
 # BusyBox, lkvm, and the complete dynamic-loader/runtime closure required by
 # lkvm. Keeping it as one tree avoids a runner-specific list of libraries.

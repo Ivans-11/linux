@@ -1,11 +1,8 @@
 #![no_std]
 
-use core::{
-    sync::atomic::{AtomicBool, Ordering},
-    time::Duration,
-};
+use core::time::Duration;
 
-use alloc::{boxed::Box, collections::BTreeMap, sync::Arc};
+use alloc::{boxed::Box, collections::BTreeMap};
 use axvisor_api::{
     api_impl,
     arch::ArchIf,
@@ -38,6 +35,14 @@ unsafe extern "C" {
     fn axvisor_linux_arch_host_fdt_paddr() -> usize;
     fn axvisor_linux_arch_host_tsc_frequency_mhz() -> u32;
     fn axvisor_linux_arch_remote_hfence_vvma_all();
+    #[cfg(target_arch = "aarch64")]
+    fn axvisor_linux_arch_inject_virtual_irq(vector: u8) -> bool;
+    #[cfg(target_arch = "aarch64")]
+    fn axvisor_linux_arch_gicd_base() -> usize;
+    #[cfg(target_arch = "aarch64")]
+    fn axvisor_linux_arch_gicr_base() -> usize;
+    #[cfg(target_arch = "aarch64")]
+    fn axvisor_linux_arch_fetch_irq() -> u64;
     fn axvisor_linux_memory_alloc_frame() -> usize;
     fn axvisor_linux_memory_alloc_contiguous(num_frames: usize, align: usize) -> usize;
     fn axvisor_linux_memory_dealloc_frame(addr: usize);
@@ -127,6 +132,14 @@ unsafe extern "C" {
 
 pub struct LinuxHost;
 
+#[cfg(target_arch = "aarch64")]
+fn read_gicd(offset: usize) -> u32 {
+    let base = unsafe { axvisor_linux_arch_gicd_base() };
+    let addr = unsafe { axvisor_linux_memory_phys_to_virt(base + offset) };
+    assert_ne!(addr, 0, "failed to map host GICD");
+    unsafe { (addr as *const u32).read_volatile() }
+}
+
 static IRQ_HANDLERS: spin::Mutex<BTreeMap<usize, IrqHandler>> = spin::Mutex::new(BTreeMap::new());
 #[cfg(feature = "control")]
 static CONTROL_OPS: spin::Mutex<Option<ControlOps>> = spin::Mutex::new(None);
@@ -197,6 +210,39 @@ impl ArchIf for LinuxHost {
         let frequency = unsafe { axvisor_linux_arch_host_tsc_frequency_mhz() };
         (frequency != 0).then_some(frequency)
     }
+
+    #[cfg(target_arch = "aarch64")]
+    fn hardware_inject_virtual_interrupt(vector: u8) {
+        assert!(
+            unsafe { axvisor_linux_arch_inject_virtual_irq(vector) },
+            "no free GICv3 list register for virtual interrupt {vector}"
+        );
+    }
+
+    #[cfg(target_arch = "aarch64")]
+    fn read_vgicd_typer() -> u32 {
+        read_gicd(0x4)
+    }
+
+    #[cfg(target_arch = "aarch64")]
+    fn read_vgicd_iidr() -> u32 {
+        read_gicd(0x8)
+    }
+
+    #[cfg(target_arch = "aarch64")]
+    fn get_host_gicd_base() -> PhysAddr {
+        PhysAddr::from_usize(unsafe { axvisor_linux_arch_gicd_base() })
+    }
+
+    #[cfg(target_arch = "aarch64")]
+    fn get_host_gicr_base() -> PhysAddr {
+        PhysAddr::from_usize(unsafe { axvisor_linux_arch_gicr_base() })
+    }
+
+    #[cfg(target_arch = "aarch64")]
+    fn fetch_irq() -> u64 {
+        unsafe { axvisor_linux_arch_fetch_irq() }
+    }
 }
 
 #[api_impl]
@@ -239,17 +285,11 @@ impl TaskIf for LinuxHost {
         // the complete task name is passed safely to the C adapter.
         name.retain(|byte| *byte != 0);
         name.push(0);
-        // A Linux kthread may run immediately after wake_up_process().  Keep
-        // it behind an explicit registration barrier until its handle has
-        // been returned by C.
-        let registered = Arc::new(AtomicBool::new(false));
-        let registered_for_task = registered.clone();
-        let holder: Box<Box<dyn FnOnce() + Send>> = Box::new(Box::new(move || {
-            while !registered_for_task.load(Ordering::Acquire) {
-                unsafe { axvisor_linux_task_yield() };
-            }
-            entry();
-        }));
+        // Completion state is allocated by the C adapter before the kthread
+        // is woken and remains valid until join_task(), so the task may start
+        // immediately.  A Rust-side start barrier can deadlock when both the
+        // creator and the new task are pinned to the same Linux CPU.
+        let holder: Box<Box<dyn FnOnce() + Send>> = Box::new(entry);
         let raw = Box::into_raw(holder) as *mut u8;
         let id = unsafe {
             axvisor_linux_spawn_task(
@@ -263,8 +303,6 @@ impl TaskIf for LinuxHost {
             unsafe {
                 drop(Box::from_raw(raw as *mut Box<dyn FnOnce() + Send>));
             }
-        } else {
-            registered.store(true, Ordering::Release);
         }
         unsafe { core::mem::transmute(id) }
     }

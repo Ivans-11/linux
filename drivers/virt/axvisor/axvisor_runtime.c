@@ -38,6 +38,10 @@
 #ifdef CONFIG_RISCV
 #include <asm/pgtable.h>
 #endif
+#ifdef CONFIG_ARM64
+#include <asm/arch_gicv3.h>
+#include <asm/sysreg.h>
+#endif
 #ifdef CONFIG_X86
 #include <asm/tsc.h>
 #endif
@@ -596,8 +600,8 @@ void *_percpu_base_ptr(unsigned long cpu)
 	return (char *)axvisor_percpu_area + cpu * axvisor_percpu_stride;
 }
 
-/* ax-percpu's external-base backend resolves the current area through this
- * callback rather than changing the host's thread-pointer register. */
+/* Resolve AxVisor's custom per-CPU area without changing an architecture
+ * thread-pointer register owned by the surrounding kernel. */
 unsigned long ax_percpu_current_base(void)
 {
 	return (unsigned long)_percpu_base_ptr(smp_processor_id());
@@ -836,7 +840,7 @@ static unsigned long axvisor_host_fdt_paddr_saved;
 
 void axvisor_linux_arch_capture_host_fdt(void)
 {
-#ifdef CONFIG_RISCV
+#if defined(CONFIG_RISCV) || defined(CONFIG_ARM64)
 	axvisor_host_fdt_paddr_saved = axvisor_linux_boot_fdt_paddr();
 #else
 	axvisor_host_fdt_paddr_saved = 0;
@@ -844,6 +848,100 @@ void axvisor_linux_arch_capture_host_fdt(void)
 	pr_info("axvisor-linux: host FDT physical address %#lx\n",
 		axvisor_host_fdt_paddr_saved);
 }
+
+#ifdef CONFIG_ARM64
+static unsigned long axvisor_gicd_base;
+static unsigned long axvisor_gicr_base;
+
+static void axvisor_linux_arch_find_gic(void)
+{
+	struct device_node *np;
+	struct resource resource;
+
+	if (axvisor_gicd_base)
+		return;
+	np = of_find_compatible_node(NULL, NULL, "arm,gic-v3");
+	if (!np)
+		return;
+	if (!of_address_to_resource(np, 0, &resource))
+		axvisor_gicd_base = resource.start;
+	if (!of_address_to_resource(np, 1, &resource))
+		axvisor_gicr_base = resource.start;
+	of_node_put(np);
+}
+
+unsigned long axvisor_linux_arch_gicd_base(void)
+{
+	axvisor_linux_arch_find_gic();
+	return axvisor_gicd_base;
+}
+
+unsigned long axvisor_linux_arch_gicr_base(void)
+{
+	axvisor_linux_arch_find_gic();
+	return axvisor_gicr_base;
+}
+
+#define AXVISOR_WRITE_ICH_LR_CASE(n) \
+	case n: write_sysreg_s(value, SYS_ICH_LR##n##_EL2); break
+
+bool axvisor_linux_arch_inject_virtual_irq(u8 vector)
+{
+	u64 elsr = read_sysreg_s(SYS_ICH_ELRSR_EL2);
+	u64 value;
+	unsigned int lr;
+
+	if (!elsr)
+		return false;
+	lr = __ffs64(elsr);
+	value = vector | ICH_LR_GROUP | ICH_LR_PENDING_BIT;
+	switch (lr) {
+	AXVISOR_WRITE_ICH_LR_CASE(0);
+	AXVISOR_WRITE_ICH_LR_CASE(1);
+	AXVISOR_WRITE_ICH_LR_CASE(2);
+	AXVISOR_WRITE_ICH_LR_CASE(3);
+	AXVISOR_WRITE_ICH_LR_CASE(4);
+	AXVISOR_WRITE_ICH_LR_CASE(5);
+	AXVISOR_WRITE_ICH_LR_CASE(6);
+	AXVISOR_WRITE_ICH_LR_CASE(7);
+	AXVISOR_WRITE_ICH_LR_CASE(8);
+	AXVISOR_WRITE_ICH_LR_CASE(9);
+	AXVISOR_WRITE_ICH_LR_CASE(10);
+	AXVISOR_WRITE_ICH_LR_CASE(11);
+	AXVISOR_WRITE_ICH_LR_CASE(12);
+	AXVISOR_WRITE_ICH_LR_CASE(13);
+	AXVISOR_WRITE_ICH_LR_CASE(14);
+	AXVISOR_WRITE_ICH_LR_CASE(15);
+	default:
+		return false;
+	}
+	return true;
+}
+
+u64 axvisor_linux_arch_fetch_irq(void)
+{
+	u64 irqnr;
+	u64 pending;
+
+	/* A guest IRQ exit is taken directly at EL2 under VHE, so Linux's normal
+	 * exception entry has not acknowledged the physical GIC interrupt. Claim
+	 * guest architected-timer PPIs here through the same CPU interface used by
+	 * gic_handle_irq().  Other physical interrupts belong to the host: leave
+	 * them pending so Linux can service them after the VM exit. */
+	pending = read_sysreg_s(SYS_ICC_HPPIR1_EL1);
+	if (pending != 27 && pending != 30)
+		return 1023;
+	irqnr = gic_read_iar();
+	if (irqnr < 1020) {
+		write_gicreg(irqnr, ICC_EOIR1_EL1);
+		gic_write_dir(irqnr);
+	}
+	if (irqnr != 27 && irqnr != 30)
+		irqnr = 1023;
+	isb();
+	return irqnr;
+}
+#endif
 
 unsigned long axvisor_linux_arch_host_fdt_paddr(void)
 {

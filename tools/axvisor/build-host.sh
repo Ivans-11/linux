@@ -6,7 +6,7 @@ ARCH=""
 cd "$ROOT_DIR"
 
 usage() {
-	echo "usage: $0 --arch riscv64|x86_64" >&2
+	echo "usage: $0 --arch aarch64|riscv64|x86_64" >&2
 }
 
 while [[ $# -gt 0 ]]; do
@@ -29,11 +29,12 @@ while [[ $# -gt 0 ]]; do
 done
 
 case "$ARCH" in
-	riscv64|x86_64) ;;
-	*) echo "--arch must be riscv64 or x86_64" >&2; exit 2 ;;
+	aarch64|riscv64|x86_64) ;;
+	*) echo "--arch must be aarch64, riscv64, or x86_64" >&2; exit 2 ;;
 esac
 
 case "$ARCH" in
+	aarch64) exec "$ROOT_DIR/build-aarch64.sh" ;;
 	riscv64) exec "$ROOT_DIR/build-riscv.sh" ;;
 	x86_64) exec "$ROOT_DIR/build-x86.sh" ;;
 esac

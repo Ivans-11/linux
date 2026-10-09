@@ -8,12 +8,13 @@ INIT_SOURCE=${3:-}
 ASSETS=${4:-}
 OUT_DIR=${OUT_DIR:-"$ROOT_DIR/.work/assets/initramfs"}
 
-if [[ "$ARCH" != "riscv64" && "$ARCH" != "x86_64" ]]; then
-	echo "usage: $0 riscv64|x86_64 source:target[,source:target...] [init-source] [asset:target,...]" >&2
+if [[ "$ARCH" != "aarch64" && "$ARCH" != "riscv64" && "$ARCH" != "x86_64" ]]; then
+	echo "usage: $0 aarch64|riscv64|x86_64 source:target[,source:target...] [init-source] [asset:target,...]" >&2
 	exit 2
 fi
 
 case "$ARCH" in
+	aarch64) TARGET="aarch64-unknown-linux-gnu" ;;
 	riscv64) TARGET="riscv64-unknown-linux-gnu" ;;
 	x86_64) TARGET="x86_64-unknown-linux-gnu" ;;
 esac

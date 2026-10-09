@@ -58,6 +58,20 @@ static int num_standard_resources;
 static struct resource *standard_resources;
 
 phys_addr_t __fdt_pointer __initdata;
+static phys_addr_t axvisor_boot_fdt_paddr __ro_after_init;
+
+static int __init axvisor_linux_capture_boot_fdt(void)
+{
+	axvisor_boot_fdt_paddr = __fdt_pointer;
+	return 0;
+}
+early_initcall(axvisor_linux_capture_boot_fdt);
+
+unsigned long axvisor_linux_boot_fdt_paddr(void)
+{
+	return axvisor_boot_fdt_paddr;
+}
+EXPORT_SYMBOL_GPL(axvisor_linux_boot_fdt_paddr);
 u64 mmu_enabled_at_boot __initdata;
 
 /*
