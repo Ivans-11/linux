@@ -2,6 +2,7 @@
 let
   pkgs = import ./sources.nix { inherit target; };
   lkvm = pkgs.callPackage ./lkvm.nix { targetArch = target; };
+  firecracker = pkgs.callPackage ./firecracker.nix { targetArch = target; };
   x86HostInitramfs = pkgs.callPackage ./x86-host-initramfs.nix { };
   gvisorNetTestX86_64 = pkgs.pkgsStatic.callPackage ./gvisor-net-test.nix {
     source = builtins.path {
@@ -19,6 +20,10 @@ let
 in {
   hostInitramfs = pkgs.callPackage ./host-initramfs.nix {
     inherit lkvm;
+    busybox = pkgs.busybox;
+  };
+  hostInitramfsFirecracker = pkgs.callPackage ./firecracker-host-initramfs.nix {
+    inherit firecracker;
     busybox = pkgs.busybox;
   };
   hostInitramfsX86_64 = x86HostInitramfs;

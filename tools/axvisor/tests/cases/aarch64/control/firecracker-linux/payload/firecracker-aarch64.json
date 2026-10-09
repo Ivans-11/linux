@@ -1,0 +1,14 @@
+{
+  "boot-source": {
+    "kernel_image_path": "/ext2/qemu-aarch64",
+    "initrd_path": "/ext2/initramfs.cpio.gz",
+    "boot_args": "console=ttyS0 reboot=k panic=1 pci=off rdinit=/test/aarch64-firecracker-linux.sh"
+  },
+  "drives": [],
+  "network-interfaces": [],
+  "machine-config": {
+    "vcpu_count": 1,
+    "mem_size_mib": 256,
+    "smt": false
+  }
+}

@@ -42,6 +42,13 @@ expression = "tests/assets/nix/default.nix"
 attribute = "hostInitramfs"
 target = "."
 
+[assets.host-initramfs-firecracker-aarch64]
+kind = "nix"
+arch = "aarch64"
+expression = "tests/assets/nix/default.nix"
+attribute = "hostInitramfsFirecracker"
+target = "."
+
 [assets.host-initramfs-x86_64]
 kind = "nix"
 arch = "x86_64"

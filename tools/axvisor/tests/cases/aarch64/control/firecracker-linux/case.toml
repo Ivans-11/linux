@@ -1,0 +1,34 @@
+arch = "aarch64"
+mode = "control"
+case = "aarch64-control-firecracker-linux"
+host_profile = "aarch64-qemu"
+status = "active"
+host_cmdline = "console=ttyAMA0 earlycon=pl011,0x09000000 panic=-1 init=/init"
+
+guest_image = "qemu-aarch64-linux"
+payload_files = ["qemu-aarch64", "initramfs.cpio.gz", "firecracker-aarch64.json"]
+payload_assets = []
+initramfs_init = "tests/programs/host_shell_init.sh"
+host_initramfs_assets = ["host-initramfs-firecracker-aarch64"]
+test_files = []
+guest_initramfs_files = [
+  { source = "guest/check.sh", target = "/test/aarch64-firecracker-linux.sh" },
+]
+timeout_secs = 600
+success_regex = ["(?m)^aarch64 firecracker linux test pass!\\s*$"]
+fail_regex = [
+  "(?i)uncaught panic", "(?i)panicked at", "(?i)kernel panic",
+  "(?i)Firecracker exiting with error", "(?i)RunWithApiError",
+  "(?i)StartMicrovm", "(?im)^KVM_[A-Z0-9_]+ failed(?:\\s|:)",
+]
+shell_prompt = "~ # "
+extra_qemu_args = [
+  "-drive",
+  "if=none,format=raw,id=firecracker_linux_payload,file={control_payload_image}",
+  "-device",
+  "virtio-blk-device,drive=firecracker_linux_payload",
+]
+
+[[interactions]]
+expect = "~ # "
+send = "umount /ext2 2>/dev/null; mount -t ext2 /dev/vda /ext2 && /test/firecracker --no-api --no-seccomp --config-file /ext2/firecracker-aarch64.json --level Debug"
