@@ -43,6 +43,8 @@ unsafe extern "C" {
     fn axvisor_linux_arch_gicr_base() -> usize;
     #[cfg(target_arch = "aarch64")]
     fn axvisor_linux_arch_fetch_irq() -> u64;
+    #[cfg(target_arch = "aarch64")]
+    fn axvisor_linux_arch_dispatch_host_irq(vector: usize) -> bool;
     fn axvisor_linux_memory_alloc_frame() -> usize;
     fn axvisor_linux_memory_alloc_contiguous(num_frames: usize, align: usize) -> usize;
     fn axvisor_linux_memory_dealloc_frame(addr: usize);
@@ -329,6 +331,10 @@ extern "C" fn axvisor_linux_task_trampoline(raw: *mut u8) -> i32 {
 #[api_impl]
 impl IrqIf for LinuxHost {
     fn handle_irq(vector: usize) -> bool {
+        #[cfg(target_arch = "aarch64")]
+        if unsafe { axvisor_linux_arch_dispatch_host_irq(vector) } {
+            return true;
+        }
         #[cfg(target_arch = "riscv64")]
         if vector == (1usize << (usize::BITS - 1)) + 1 {
             let flags = unsafe { axvisor_linux_irq_local_save() };

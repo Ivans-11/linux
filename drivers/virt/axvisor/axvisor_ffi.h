@@ -66,6 +66,7 @@ bool axvisor_linux_arch_inject_virtual_irq(u8 vector);
 unsigned long axvisor_linux_arch_gicd_base(void);
 unsigned long axvisor_linux_arch_gicr_base(void);
 u64 axvisor_linux_arch_fetch_irq(void);
+bool axvisor_linux_arch_dispatch_host_irq(unsigned long vector);
 #endif
 void *axvisor_linux_alloc(size_t size, size_t align);
 void axvisor_linux_dealloc(void *ptr);

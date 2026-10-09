@@ -2,9 +2,9 @@
 id = 1
 name = "linux-aarch64-qemu"
 vm_type = 2
-cpu_num = 1
-phys_cpu_ids = [0]
-phys_cpu_sets = [1]
+cpu_num = 4
+phys_cpu_ids = [0, 1, 2, 3]
+phys_cpu_sets = [1, 2, 1, 2]
 
 [kernel]
 entry_point = 0x4020_0000
@@ -14,7 +14,7 @@ kernel_load_addr = 0x4020_0000
 ramdisk_path = "{case_dir}/payload/initramfs.cpio.gz"
 ramdisk_load_addr = 0x4700_0000
 dtb_load_addr = 0x4800_0000
-cmdline = "console=ttyAMA0 earlycon=pl011 rdinit=/init devtmpfs.mount=1"
+cmdline = "console=ttyAMA0 earlycon=pl011 rdinit=/test/aarch64-static-linux.sh devtmpfs.mount=1"
 memory_regions = [[0x4000_0000, 0x1000_0000, 0x7, 0]]
 
 [devices]
@@ -25,5 +25,5 @@ excluded_devices = []
 emu_devices = [
   ["pl011", 0x0900_0000, 0x1000, 33, 0x2, []],
   ["gppt-gicd", 0x0800_0000, 0x1_0000, 0, 0x21, []],
-  ["gppt-gicr", 0x080a_0000, 0x2_0000, 0, 0x20, [1, 0x2_0000, 0]],
+  ["gppt-gicr", 0x080a_0000, 0x2_0000, 0, 0x20, []],
 ]

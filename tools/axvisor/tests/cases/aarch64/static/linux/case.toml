@@ -10,7 +10,15 @@ vm_config = "vm.toml"
 payload_files = ["qemu-aarch64", "initramfs.cpio.gz"]
 payload_assets = []
 test_files = []
+guest_initramfs_files = [
+  { source = "guest/check.sh", target = "/test/aarch64-static-linux.sh" },
+]
 timeout_secs = 180
-success_regex = ["(?m)^test pass!\\s*$"]
-fail_regex = []
+success_regex = ["(?m)^aarch64 static linux test pass!\\s*$"]
+fail_regex = [
+  "(?i)kernel panic",
+  "(?i)panicked at",
+  "(?i)failed to boot secondary cpu",
+  "(?m)^aarch64 static linux test fail:",
+]
 host_cmdline = "console=ttyAMA0 earlycon=pl011,0x09000000 panic=-1 init=/init"
