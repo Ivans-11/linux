@@ -22,7 +22,6 @@
 #include <linux/reboot.h>
 #include <linux/eventfd.h>
 #include <linux/interrupt.h>
-#include <linux/irqdomain.h>
 #include <linux/irqchip/arm-gic-v3.h>
 #include <linux/fs.h>
 #include <linux/console.h>
@@ -854,7 +853,6 @@ void axvisor_linux_arch_capture_host_fdt(void)
 #ifdef CONFIG_ARM64
 static unsigned long axvisor_gicd_base;
 static unsigned long axvisor_gicr_base;
-static struct irq_domain *axvisor_gic_domain;
 
 static void axvisor_linux_arch_find_gic(void)
 {
@@ -870,7 +868,6 @@ static void axvisor_linux_arch_find_gic(void)
 		axvisor_gicd_base = resource.start;
 	if (!of_address_to_resource(np, 1, &resource))
 		axvisor_gicr_base = resource.start;
-	axvisor_gic_domain = irq_find_host(np);
 	of_node_put(np);
 }
 
@@ -928,20 +925,13 @@ u64 axvisor_linux_arch_fetch_irq(void)
 	u64 pending;
 
 	/* A guest IRQ exit is taken directly at EL2 under VHE, so Linux's normal
-	 * exception entry has not acknowledged the physical GIC interrupt. Claim
-	 * guest architected-timer PPIs here through the same CPU interface used by
-	 * gic_handle_irq().  Other physical interrupts belong to the host: leave
-	 * them pending so Linux can service them after the VM exit. */
+	 * exception entry has not acknowledged the physical GIC interrupt. Leave
+	 * host interrupts pending so Linux can take them through its normal vector
+	 * after the vCPU thread yields. Only guest timer PPIs are claimed here. */
 	pending = read_sysreg_s(SYS_ICC_HPPIR1_EL1);
-	if (pending != 26 && pending != 27 && pending != 30)
-		return 1023;
+	if (pending != 27 && pending != 30)
+		return pending;
 	irqnr = gic_read_iar();
-	if (irqnr == 26) {
-		if (read_gicreg(ICC_CTLR_EL1) & ICC_CTLR_EL1_EOImode_MASK)
-			write_gicreg(irqnr, ICC_EOIR1_EL1);
-		isb();
-		return irqnr;
-	}
 	if (irqnr == 27 || irqnr == 30) {
 		write_gicreg(irqnr, ICC_EOIR1_EL1);
 		gic_write_dir(irqnr);
@@ -954,16 +944,9 @@ u64 axvisor_linux_arch_fetch_irq(void)
 
 bool axvisor_linux_arch_dispatch_host_irq(unsigned long vector)
 {
-	unsigned long flags;
-	int ret;
-
-	axvisor_linux_arch_find_gic();
-	if (!axvisor_gic_domain)
-		return false;
-	local_irq_save(flags);
-	ret = generic_handle_domain_irq(axvisor_gic_domain, vector);
-	local_irq_restore(flags);
-	return ret == 0;
+	/* fetch_irq() only peeked at this interrupt. Keep it pending until the
+	 * vCPU thread restores the host exception vector and unmasks IRQs. */
+	return vector < 1020;
 }
 #endif
 
