@@ -22,7 +22,6 @@
 #include <linux/reboot.h>
 #include <linux/eventfd.h>
 #include <linux/interrupt.h>
-#include <linux/irqchip/arm-gic-v3.h>
 #include <linux/fs.h>
 #include <linux/console.h>
 #include <linux/kfifo.h>
@@ -40,6 +39,7 @@
 #include <asm/pgtable.h>
 #endif
 #ifdef CONFIG_ARM64
+#include <linux/irqchip/arm-gic-v3.h>
 #include <asm/arch_gicv3.h>
 #include <asm/sysreg.h>
 #endif
