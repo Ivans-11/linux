@@ -6,6 +6,7 @@ LINUX_DIR=${LINUX_DIR:-"$(cd "$ROOT_DIR/../.." && pwd)"}
 BUILD_DIR=${BUILD_DIR:-"$ROOT_DIR/.work/build-x86"}
 BUILD_DIR=$(realpath -m "$BUILD_DIR")
 RUST_DIR="$LINUX_DIR/drivers/virt/axvisor/rust"
+TARGET_SPEC="$RUST_DIR/targets/x86_64-linux-kernel.json"
 CARGO_TARGET_DIR=${CARGO_TARGET_DIR:-"$ROOT_DIR/target"}
 export CARGO_TARGET_DIR
 TOOLCHAIN=${RUSTUP_TOOLCHAIN:-nightly-2026-05-28}
@@ -74,8 +75,9 @@ if [[ "$BUILD_STAGE" != "image" ]]; then
 	# --emit output. Track the identity so mode changes cannot reuse an object.
 	mkdir -p "$RUST_STAMP_DIR"
 	DEPENDENCY_OPT_LEVEL=${CARGO_PROFILE_DEV_OPT_LEVEL:-default}
-	HOST_KEY="target=x86_64-linux-kernel;toolchain=$TOOLCHAIN;cargo_target=$CARGO_TARGET_DIR;dependency_opt=$DEPENDENCY_OPT_LEVEL;features=$HOST_FEATURES;flags=panic=abort,opt=2,reloc=static,code=kernel"
-	CORE_KEY="target=x86_64-linux-kernel;toolchain=$TOOLCHAIN;cargo_target=$CARGO_TARGET_DIR;dependency_opt=$DEPENDENCY_OPT_LEVEL;features=$CORE_FEATURES;flags=panic=abort,opt=2,reloc=static,code=kernel,staticlib"
+	TARGET_SPEC_HASH=$(sha256sum "$TARGET_SPEC" | cut -d' ' -f1)
+	HOST_KEY="target=x86_64-linux-kernel:$TARGET_SPEC_HASH;toolchain=$TOOLCHAIN;cargo_target=$CARGO_TARGET_DIR;dependency_opt=$DEPENDENCY_OPT_LEVEL;features=$HOST_FEATURES;flags=panic=abort,opt=2,reloc=static,code=kernel"
+	CORE_KEY="target=x86_64-linux-kernel:$TARGET_SPEC_HASH;toolchain=$TOOLCHAIN;cargo_target=$CARGO_TARGET_DIR;dependency_opt=$DEPENDENCY_OPT_LEVEL;features=$CORE_FEATURES;flags=panic=abort,opt=2,reloc=static,code=kernel,staticlib"
 	FORCE_HOST=0
 	FORCE_CORE=0
 	if [[ ! -f "$HOST_OBJ" || ! -f "$RUST_STAMP_DIR/host" || "$(cat "$RUST_STAMP_DIR/host")" != "$HOST_KEY" ]]; then
@@ -120,9 +122,10 @@ CONFIG_KEY=$({
 } | sha256sum | cut -d' ' -f1)
 if [[ ! -f "$BUILD_DIR/.config" || ! -f "$CONFIG_STAMP" || "$(cat "$CONFIG_STAMP")" != "$CONFIG_KEY" ]]; then
 	make -C "$LINUX_DIR" ARCH=x86 LLVM="$KBUILD_LLVM" O="$BUILD_DIR" x86_64_defconfig
-        printf '%s\n' "$CONFIG_KEY" > "$CONFIG_STAMP"
+	rm -f "$BUILD_DIR/Module.symvers"
+	printf '%s\n' "$CONFIG_KEY" > "$CONFIG_STAMP"
 else
-        echo "Reusing x86 kernel configuration $CONFIG_KEY"
+	echo "Reusing x86 kernel configuration $CONFIG_KEY"
 fi
 
 # Enforce the case-independent options on every invocation. This is cheap,
@@ -132,6 +135,7 @@ fi
 "$LINUX_DIR/scripts/config" --file "$BUILD_DIR/.config" \
 	-d KVM -e MODULES -e CMA -e DMA_CMA -e VIRT_DRIVERS -m AXVISOR_LINUX_BRIDGE \
 	-d VIRTIO_BLK -d VIRTIO_NET \
+	-e X86_X2APIC -e INTEL_IOMMU -e IRQ_REMAP \
 	-e PRINTK -e SERIAL_8250 -e SERIAL_8250_CONSOLE -e BLK_DEV_INITRD \
 	-e DEVTMPFS -e DEVTMPFS_MOUNT -e EXT2_FS -e TUN -d DEBUG_INFO -d WERROR
 if [[ "$BUILD_STAGE" != "module" && -n "${AXVISOR_INITRAMFS:-}" ]]; then
