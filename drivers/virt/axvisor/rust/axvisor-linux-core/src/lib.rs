@@ -38,7 +38,7 @@ pub extern "C" fn axvisor_linux_core_init_percpu_reg(cpu_id: usize) {
 
 impl log::Log for LinuxLogger {
     fn enabled(&self, metadata: &log::Metadata<'_>) -> bool {
-        metadata.level() <= log::Level::Info
+        metadata.level() <= log::Level::Warn
     }
 
     fn log(&self, record: &log::Record<'_>) {
@@ -99,7 +99,7 @@ pub extern "C" fn axvisor_linux_core_boot() -> ! {
     CONTROL_MODE_ACTIVE.store(false, Ordering::Release);
     boot_log(b"axvisor-linux: entering static boot flow\n");
     let _ = log::set_logger(&LOGGER);
-    log::set_max_level(log::LevelFilter::Info);
+    log::set_max_level(log::LevelFilter::Warn);
     axvisor_core::boot::run_static_mode();
     loop {
         // `run_static_mode` returns when no VM remains. Keep the host kthread
@@ -119,7 +119,7 @@ use axvisor_linux_conformance as _;
 pub extern "C" fn axvisor_linux_core_control_boot() -> i32 {
     CONTROL_MODE_ACTIVE.store(true, Ordering::Release);
     let _ = log::set_logger(&LOGGER);
-    log::set_max_level(log::LevelFilter::Info);
+    log::set_max_level(log::LevelFilter::Warn);
     match axvisor_core::boot::init_control_mode() {
         Ok(()) => 0,
         Err(err) => {
